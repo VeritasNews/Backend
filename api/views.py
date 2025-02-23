@@ -9,24 +9,51 @@ class ArticleListView(APIView):
         articles = Article.objects.all()  # Get all articles
         serializer = ArticleSerializer(articles, many=True)  # Serialize the articles
         return Response(serializer.data)  # Return serialized data as a response
-
+    
 def insert_articles(request):
     articles = [
-        {"title": "Grevcilerin Destek Kazanması", "content": "Grevin desteği arttıkça daha fazla vatandaş protestolara katılarak, sistemik değişiklikler için baskı yapıyor.", "date": "2024-12-20", "image_path": None},
-        {"title": "İşçiler Daha İyi Koşullar Talep Ediyor", "content": "Grevciler, daha iyi maaşlar ve çalışma koşulları talep ediyor, bu da ülke genelinde işçi haklarıyla ilgili tartışmaları tetikliyor.", "date": "2024-12-19", "image_path": "path_to_image/image2.jpg"},
-        {"title": "Hükümetin Tutumu", "content": "Hükümet yetkilileri, kesintilerin sona ermesini ve normale dönülmesini isteyen kararlı bir tutum sergiliyor.", "date": "2024-12-18", "image_path": None},
+        {
+            "articleId": "1",
+            "title": "Bahçeli, Öcalan'ı Mecliste Konuşmaya Çağırıyor: Silah Bırakımını İlan Etmeli",
+            "content": "Bahçeli, Öcalan'ı Meclis'te DEM grubunda silahları bırakıp terörün sonunu ilan etmeye çağırdı.  \"Umut Hakkı\"ndan yararlanma teklifini de gündeme getirdi.",
+            "summary": "Bahçeli, Öcalan'ı Meclis'te konuşmaya çağırdı.",
+            "longerSummary": "MHP lideri Bahçeli, Öcalan'ın Meclis'te DEM partisine gelerek terörün sonlandığını ilan etmesini istedi. Bu adımın \"umut hakkı\" yasasıyla Öcalan'ın serbest kalmasının önünü açabileceğini belirtti.",
+            "category": "Politics",
+            "tags": ["Politics", "Turkey"],
+            "source": "Local News",
+            "location": "Ankara",
+            "popularityScore": 100,
+            "image": None,
+        },
+        {
+            "articleId": "2",
+            "title": "Erdoğan, Sudan Egemenlik Konseyi Başkanı ile Görüştü",
+            "content": "Cumhurbaşkanı Erdoğan, Sudan Egemenlik Konseyi Başkanı Burhan ile görüştü.  Görüşmede Türkiye-Sudan ilişkileri, bölgesel konular ve Türkiye'nin Somali-Etiyopya anlaşmazlığındaki rolü ele alındı. Erdoğan, Sudan-BAE ihtilafında da arabuluculuk teklif etti.",
+            "summary": "Erdoğan, Sudan lideri ile görüştü.",
+            "longerSummary": "Cumhurbaşkanı Erdoğan, Sudan Egemenlik Konseyi Başkanı Burhan ile bir araya geldi. Görüşmede bölgesel konular ve Türkiye'nin arabuluculuk rolü ele alındı.",
+            "category": "International",
+            "tags": ["Erdoğan", "Sudan"],
+            "source": "International News",
+            "location": "Sudan",
+            "popularityScore": 85,
+            "image": None,
+        },
         # Add the rest of the articles...
     ]
-    
+
     for article in articles:
-        # If using ImageField, handle image paths differently
-        image = article['image_path'] if article['image_path'] else None
-        
         Article.objects.create(
+            articleId=article['articleId'],
             title=article['title'],
             content=article['content'],
-            date=article['date'],
-            image=image  # Use the field name 'image' or 'image_path' based on your model
+            summary=article['summary'],
+            longerSummary=article['longerSummary'],
+            category=article['category'],
+            tags=article['tags'],
+            source=article['source'],
+            location=article['location'],
+            popularityScore=article['popularityScore'],
+            image=article['image'],
         )
     
     return JsonResponse({"message": "Articles inserted successfully!"})
