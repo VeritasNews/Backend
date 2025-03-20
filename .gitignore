@@ -1,1 +1,5 @@
 venv
+_pycache_
+migrations
+api/_pycache_
+api/migrations

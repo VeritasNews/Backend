@@ -1,37 +1,31 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import Article
-from .serializers import ArticleSerializer
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
+from rest_framework.decorators import api_view
 from django.http import JsonResponse
 from django.db.models import Q
 import json
 import os
 import uuid
-from django.conf import settings
+import logging
+from rest_framework import status
+from api.models import Article
+from api.serializers import ArticleSerializer
 
+logger = logging.getLogger(__name__)
 
 class ArticleListView(APIView):
     def get(self, request, *args, **kwargs):
         articles = Article.objects.all()  # Get all articles
         serializer = ArticleSerializer(articles, many=True)  # Serialize the articles
         return Response(serializer.data)  # Return serialized data as a response
-    
-# ✅ Correct the directory path
-GENERATED_ARTICLES_DIR = "ADD_YOUR_PATH_HERE"  # Add your path here
 
-# ✅ Debugging: Print the actual path
-print("Checking path:", GENERATED_ARTICLES_DIR)
+# Directory path for JSON files
+GENERATED_ARTICLES_DIR = r"C:\Users\zeyne\Desktop\bitirme\VeritasNews\News-Objectify\objectified_jsons"
 
-# ✅ Ensure directory exists
+# Ensure directory exists
 if not os.path.exists(GENERATED_ARTICLES_DIR):
-    print("⚠️ ERROR: The directory does not exist!")
-    os.makedirs(GENERATED_ARTICLES_DIR)  # ✅ Create it automatically
-    print("✅ Directory created:", GENERATED_ARTICLES_DIR)
-# ✅ Convert to an APIView
+    os.makedirs(GENERATED_ARTICLES_DIR)  # Create it automatically
 
-        
 class InsertArticlesView(APIView):
     def post(self, request, *args, **kwargs):
         inserted_count = 0
@@ -46,45 +40,44 @@ class InsertArticlesView(APIView):
                         try:
                             data = json.load(file)
 
-                            # ✅ Debugging: Print data before inserting
-                            print(f"📥 Received JSON from {filename}: {json.dumps(data, indent=2)}")
-
-                            # ✅ Extract fields with defaults
+                            # Extract fields with defaults
                             title = data.get("title", "").strip() or None
                             summary = data.get("summary", "").strip() or None
                             longer_summary = data.get("longerSummary", "").strip() or None
                             source = data.get("source", []) or None
                             article_id = data.get("articleId", str(uuid.uuid4()))
+                            category = data.get("category", "Genel").strip()  # Ensure no extra spaces
 
-                            # ✅ Allow inserting even if title is missing
+                            # Create the article
                             Article.objects.create(
                                 articleId=article_id,
-                                title=title,  # Allow None
-                                summary=summary,  # Allow None
-                                longerSummary=longer_summary,  # Allow None
-                                source=source,  # Allow None
+                                title=title,
+                                summary=summary,
+                                longerSummary=longer_summary,
+                                source=source,
                                 content="",
-                                category=None,
+                                category=category,
                                 tags=[],
                                 location=None,
                                 popularityScore=0,
                                 image=None
                             )
+
                             inserted_count += 1
 
                         except json.JSONDecodeError:
-                            errors.append(f"❌ Failed to parse {filename}: Invalid JSON.")
+                            errors.append(f"Failed to parse {filename}: Invalid JSON.")
                         except Exception as e:
-                            errors.append(f"❌ Error inserting {filename}: {str(e)}")
+                            errors.append(f"Error inserting {filename}: {str(e)}")
 
             return Response({
-                "message": f"✅ Successfully inserted {inserted_count} unique articles.",
+                "message": f"Successfully inserted {inserted_count} articles.",
                 "errors": errors
             }, status=201)
 
         except Exception as e:
             return Response({"error": str(e)}, status=500)
-        
+
 def delete_articles(request, _id=-1):
     """
     Deletes articles based on the given id.
@@ -101,7 +94,23 @@ def delete_articles(request, _id=-1):
             if deleted_count > 0:
                 return JsonResponse({"message": f"Deleted {deleted_count} article(s) with id {_id} successfully!"})
             else:
-                return JsonResponse({"message": f"No article with id {_id} is found, make sure to input articleID (uuid)!"})
-    
+                return JsonResponse({"message": f"No article with id {_id} found."})
+
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
+
+@api_view(['GET'])
+def get_articles(request):
+    category = request.GET.get('category', None)  # Get category from query
+
+    if category:
+        category = category.strip()  # Remove extra spaces
+        logger.info(f"Filtering by category: '{category}'")  # Log category
+        articles = Article.objects.filter(category__iexact=category)  # Case-insensitive filtering
+    else:
+        articles = Article.objects.all()
+
+    # Log only the count of articles being returned
+    logger.info(f"Returning {articles.count()} articles.")
+    serializer = ArticleSerializer(articles, many=True)
+    return Response(serializer.data)

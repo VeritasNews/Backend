@@ -1,0 +1,44 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, IsAdminUser  # Add IsAdminUser
+from api.models import User
+from api.serializers import UserSerializer
+
+class ListUsersView(APIView):
+    def get(self, request):
+        try:
+            # Optimize the query to prefetch related Many-to-Many fields
+            users = User.objects.all().prefetch_related(
+                'likedArticles',  # Prefetch liked articles
+                'readingHistory',  # Prefetch reading history
+                'friends'  # Prefetch friends
+            )
+            
+            # Serialize the users
+            serializer = UserSerializer(users, many=True)
+            
+            # Return the serialized data
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            # Handle any unexpected errors
+            return Response(
+                {"error": "An error occurred while fetching users.", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class SavePreferredCategoriesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        categories = request.data.get("categories", [])
+
+        if len(categories) < 5:
+            return Response({"error": "Select at least 5 categories."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.preferredCategories = categories
+        user.save()
+
+        return Response({"message": "Preferences updated successfully!"}, status=status.HTTP_200_OK)
