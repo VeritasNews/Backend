@@ -14,6 +14,7 @@ class Article(models.Model):
     popularityScore = models.IntegerField(default=0)
     createdAt = models.DateTimeField(null=True, blank=True)  # Make it nullable
     image = models.ImageField(upload_to='articles/', null=True, blank=True)
+    priority = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.title

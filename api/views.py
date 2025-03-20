@@ -2,7 +2,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import Article
 from .serializers import ArticleSerializer
+from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+from django.http import JsonResponse
+from django.db.models import Q
+import json
+import os
+import uuid
+from django.conf import settings
+
 
 class ArticleListView(APIView):
     def get(self, request, *args, **kwargs):
@@ -10,50 +18,90 @@ class ArticleListView(APIView):
         serializer = ArticleSerializer(articles, many=True)  # Serialize the articles
         return Response(serializer.data)  # Return serialized data as a response
     
-def insert_articles(request):
-    articles = [
-        {
-            "articleId": "1",
-            "title": "Bahçeli, Öcalan'ı Mecliste Konuşmaya Çağırıyor: Silah Bırakımını İlan Etmeli",
-            "content": "Bahçeli, Öcalan'ı Meclis'te DEM grubunda silahları bırakıp terörün sonunu ilan etmeye çağırdı.  \"Umut Hakkı\"ndan yararlanma teklifini de gündeme getirdi.",
-            "summary": "Bahçeli, Öcalan'ı Meclis'te konuşmaya çağırdı.",
-            "longerSummary": "MHP lideri Bahçeli, Öcalan'ın Meclis'te DEM partisine gelerek terörün sonlandığını ilan etmesini istedi. Bu adımın \"umut hakkı\" yasasıyla Öcalan'ın serbest kalmasının önünü açabileceğini belirtti.",
-            "category": "Politics",
-            "tags": ["Politics", "Turkey"],
-            "source": "Local News",
-            "location": "Ankara",
-            "popularityScore": 100,
-            "image": None,
-        },
-        {
-            "articleId": "2",
-            "title": "Erdoğan, Sudan Egemenlik Konseyi Başkanı ile Görüştü",
-            "content": "Cumhurbaşkanı Erdoğan, Sudan Egemenlik Konseyi Başkanı Burhan ile görüştü.  Görüşmede Türkiye-Sudan ilişkileri, bölgesel konular ve Türkiye'nin Somali-Etiyopya anlaşmazlığındaki rolü ele alındı. Erdoğan, Sudan-BAE ihtilafında da arabuluculuk teklif etti.",
-            "summary": "Erdoğan, Sudan lideri ile görüştü.",
-            "longerSummary": "Cumhurbaşkanı Erdoğan, Sudan Egemenlik Konseyi Başkanı Burhan ile bir araya geldi. Görüşmede bölgesel konular ve Türkiye'nin arabuluculuk rolü ele alındı.",
-            "category": "International",
-            "tags": ["Erdoğan", "Sudan"],
-            "source": "International News",
-            "location": "Sudan",
-            "popularityScore": 85,
-            "image": None,
-        },
-        # Add the rest of the articles...
-    ]
+# ✅ Correct the directory path
+GENERATED_ARTICLES_DIR = "ADD_YOUR_PATH_HERE"  # Add your path here
 
-    for article in articles:
-        Article.objects.create(
-            articleId=article['articleId'],
-            title=article['title'],
-            content=article['content'],
-            summary=article['summary'],
-            longerSummary=article['longerSummary'],
-            category=article['category'],
-            tags=article['tags'],
-            source=article['source'],
-            location=article['location'],
-            popularityScore=article['popularityScore'],
-            image=article['image'],
-        )
+# ✅ Debugging: Print the actual path
+print("Checking path:", GENERATED_ARTICLES_DIR)
+
+# ✅ Ensure directory exists
+if not os.path.exists(GENERATED_ARTICLES_DIR):
+    print("⚠️ ERROR: The directory does not exist!")
+    os.makedirs(GENERATED_ARTICLES_DIR)  # ✅ Create it automatically
+    print("✅ Directory created:", GENERATED_ARTICLES_DIR)
+# ✅ Convert to an APIView
+
+        
+class InsertArticlesView(APIView):
+    def post(self, request, *args, **kwargs):
+        inserted_count = 0
+        errors = []
+
+        try:
+            for filename in os.listdir(GENERATED_ARTICLES_DIR):
+                if filename.endswith(".json"):
+                    filepath = os.path.join(GENERATED_ARTICLES_DIR, filename)
+
+                    with open(filepath, 'r', encoding='utf-8') as file:
+                        try:
+                            data = json.load(file)
+
+                            # ✅ Debugging: Print data before inserting
+                            print(f"📥 Received JSON from {filename}: {json.dumps(data, indent=2)}")
+
+                            # ✅ Extract fields with defaults
+                            title = data.get("title", "").strip() or None
+                            summary = data.get("summary", "").strip() or None
+                            longer_summary = data.get("longerSummary", "").strip() or None
+                            source = data.get("source", []) or None
+                            article_id = data.get("articleId", str(uuid.uuid4()))
+
+                            # ✅ Allow inserting even if title is missing
+                            Article.objects.create(
+                                articleId=article_id,
+                                title=title,  # Allow None
+                                summary=summary,  # Allow None
+                                longerSummary=longer_summary,  # Allow None
+                                source=source,  # Allow None
+                                content="",
+                                category=None,
+                                tags=[],
+                                location=None,
+                                popularityScore=0,
+                                image=None
+                            )
+                            inserted_count += 1
+
+                        except json.JSONDecodeError:
+                            errors.append(f"❌ Failed to parse {filename}: Invalid JSON.")
+                        except Exception as e:
+                            errors.append(f"❌ Error inserting {filename}: {str(e)}")
+
+            return Response({
+                "message": f"✅ Successfully inserted {inserted_count} unique articles.",
+                "errors": errors
+            }, status=201)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+        
+def delete_articles(request, _id=-1):
+    """
+    Deletes articles based on the given id.
+    - If id is -1, all articles will be deleted.
+    - If an article with the given id exists, it will be deleted.
+    - If no matching article is found, an error message will be returned.
+    """
+    try:
+        if _id == -1:
+            deleted_count, _ = Article.objects.all().delete()
+            return JsonResponse({"message": f"Deleted all {deleted_count} articles successfully!"})
+        else:
+            deleted_count, _ = Article.objects.filter(articleId=_id).delete()
+            if deleted_count > 0:
+                return JsonResponse({"message": f"Deleted {deleted_count} article(s) with id {_id} successfully!"})
+            else:
+                return JsonResponse({"message": f"No article with id {_id} is found, make sure to input articleID (uuid)!"})
     
-    return JsonResponse({"message": "Articles inserted successfully!"})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
