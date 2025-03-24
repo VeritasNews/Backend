@@ -10,14 +10,14 @@ from .views.authViews import RegisterView, LoginView
 urlpatterns = [
     # User views
     path('users/', ListUsersView.as_view(), name='list-users'),
-    path('save-preferences/', SavePreferredCategoriesView.as_view(), name='save-preferences'),
+    path('save_preferences/', SavePreferredCategoriesView.as_view(), name='save-preferences'),
     # path('delete-non-superusers/', DeleteNonSuperusersView.as_view(), name='delete-non-superusers'),  # Add this line
 
     # Article views
     path('articles/', ArticleListView.as_view(), name='article-list'),
-    path('insert-articles/', InsertArticlesView.as_view(), name='insert-articles'),
-    path('delete-articles/<int:_id>/', delete_articles, name='delete-articles'),
-    path('get-articles/', get_articles, name='get-articles'),
+    path('insert_articles/', InsertArticlesView.as_view(), name='insert-articles'),
+    path('delete_articles/', delete_articles, name='delete-articles'),
+    path('get_articles/', get_articles, name='get-articles'),
 
     # Auth views
     path('register/', RegisterView.as_view(), name='register'),
