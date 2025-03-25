@@ -1,10 +1,25 @@
 from rest_framework import serializers
 from .models import Article, User
 
+from rest_framework import serializers
+from .models import Article, User
+
 class ArticleSerializer(serializers.ModelSerializer):
+    liked_by_count = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+
     class Meta:
         model = Article
-        fields = '__all__'  # Or specify the fields you want to include
+        fields = '__all__'  # Or specify manually if needed
+
+    def get_liked_by_count(self, obj):
+        return obj.liked_by_users.count()
+
+    def get_is_liked(self, obj):
+        request = self.context.get('request')
+        if request and hasattr(request, "user") and request.user.is_authenticated:
+            return obj in request.user.likedArticles.all()
+        return False
 
 
 class UserSerializer(serializers.ModelSerializer):
