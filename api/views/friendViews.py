@@ -122,3 +122,20 @@ class FriendRequestListView(APIView):
 
         return Response(data)
     
+from api.models import Article
+from api.serializers import ArticleSerializer  # Make sure this includes userId, name, userName
+
+class FriendsLikedArticlesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        friends = user.friends.all()
+
+        # Collect all articles liked by friends
+        liked_articles = Article.objects.filter(liked_by_users__in=friends).distinct()
+
+        # You probably need to serialize them
+        from api.serializers import ArticleSerializer
+        serialized = ArticleSerializer(liked_articles, many=True)
+        return Response(serialized.data)

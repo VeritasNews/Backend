@@ -10,7 +10,7 @@ from .views.userViews import (
 from .views.articleViews import ArticleListView, InsertArticlesView, delete_articles, get_articles, get_article_by_id
 from .views.authViews import RegisterView, LoginView
 from .views.likeViews import like_article, unlike_article, get_liked_articles
-from .views.friendViews import FriendRequestListView, SendFriendRequestView, AcceptFriendRequestView, RejectFriendRequestView, ListFriendsView, SearchUsersView
+from .views.friendViews import FriendsLikedArticlesView, FriendRequestListView, SendFriendRequestView, AcceptFriendRequestView, RejectFriendRequestView, ListFriendsView, SearchUsersView
 
 urlpatterns = [
     # User views
@@ -45,4 +45,5 @@ urlpatterns = [
     path('friends/', ListFriendsView.as_view(), name='list-friends'),
     path('users/search/', SearchUsersView.as_view(), name='search-users'),
     path('friends/requests/', FriendRequestListView.as_view(), name='friend-requests'),
+    path("articles/friends_liked/", FriendsLikedArticlesView.as_view(), name="friends-liked-articles"),
 ]
