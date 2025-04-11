@@ -2,6 +2,10 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 import uuid
 
+# ✅ Move this function OUTSIDE the class
+# def generate_unique_guest_username():
+#     return f"guest_{uuid.uuid4()}"
+
 class Article(models.Model):
     articleId = models.CharField(max_length=100, unique=True, null=True, blank=True)
     title = models.CharField(max_length=255)
@@ -35,8 +39,13 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_superuser", True)
         return self.create_user(email, name, password, **extra_fields)
 
+def generate_unique_guest_username():
+    import uuid
+    return f"guest_{uuid.uuid4().hex[:10]}"
+
 class User(AbstractBaseUser, PermissionsMixin):
     userId = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    userName = models.CharField(max_length=255, unique=True)
     name = models.CharField(max_length=255)
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=255)
@@ -44,11 +53,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     preferredCategories = models.JSONField(default=list)
     location = models.CharField(max_length=255, blank=True, null=True)
     isPremium = models.BooleanField(default=False)
-    
-    # 🔥 FIX: Remove "api." from ManyToManyField
+
     likedArticles = models.ManyToManyField(Article, related_name="liked_by_users", blank=True)
     readingHistory = models.ManyToManyField(Article, related_name="reading_history", blank=True)
-
     friends = models.ManyToManyField("self", blank=True)
     notificationsEnabled = models.BooleanField(default=True)
     privacySettings = models.JSONField(default=dict)
@@ -63,3 +70,21 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.name
+
+from django.conf import settings
+
+class FriendRequest(models.Model):
+    from_user = models.ForeignKey(User, related_name='sent_requests', on_delete=models.CASCADE)
+    to_user = models.ForeignKey(User, related_name='received_requests', on_delete=models.CASCADE)
+    status = models.CharField(
+        max_length=20,
+        choices=[('pending', 'Pending'), ('accepted', 'Accepted'), ('rejected', 'Rejected')],
+        default='pending'  # ✅ This ensures no migration errors
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('from_user', 'to_user')
+
+    def __str__(self):
+        return f"{self.from_user.name} ➡️ {self.to_user.name}"

@@ -42,3 +42,41 @@ class SavePreferredCategoriesView(APIView):
         user.save()
 
         return Response({"message": "Preferences updated successfully!"}, status=status.HTTP_200_OK)
+
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        serializer = UserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+# views/userViews.py
+class GetUserByIdView(APIView):
+    def get(self, request, user_id):
+        try:
+            user = User.objects.get(userId=user_id)
+            serializer = UserSerializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+from rest_framework.permissions import IsAdminUser
+
+from rest_framework.permissions import IsAuthenticated, AllowAny  # Or AllowAny for no auth at all
+
+class DeleteAllUsersView(APIView):
+    permission_classes = [AllowAny]  # or [IsAuthenticated] if login required
+
+    def delete(self, request):
+        try:
+            deleted_count, _ = User.objects.exclude(is_superuser=True).delete()
+            return Response(
+                {"message": f"Deleted {deleted_count} user(s)."},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": "Failed to delete users.", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -18,17 +18,24 @@ class RegisterView(APIView):
             return Response({
                 'message': 'Registration successful',
                 'user_id': user.userId,
+                'userName': user.userName,
+                'name': user.name,
                 'email': user.email,
                 'access': access_token,  # Include the access token
                 'refresh': str(refresh),  # Include the refresh token
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+from django.db.models import Q
+
 class LoginView(APIView):
     def post(self, request):
-        email = request.data.get('email')
+        identifier = request.data.get('identifier')
         password = request.data.get('password')
-        user = User.objects.filter(email=email).first()
+
+        user = User.objects.filter(
+            Q(email=identifier) | Q(userName=identifier)  # 👈 check either
+        ).first()
 
         if user and user.check_password(password):
             refresh = RefreshToken.for_user(user)
@@ -36,4 +43,5 @@ class LoginView(APIView):
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
             }, status=status.HTTP_200_OK)
+
         return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
