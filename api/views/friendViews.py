@@ -139,3 +139,29 @@ class FriendsLikedArticlesView(APIView):
         from api.serializers import ArticleSerializer
         serialized = ArticleSerializer(liked_articles, many=True)
         return Response(serialized.data)
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
+from api.models import Article, User
+from api.serializers import UserSerializer  # Make sure this includes userId, name, userName
+
+class FriendsWhoLikedArticleView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, article_id):
+        try:
+            article = Article.objects.get(id=article_id)
+        except Article.DoesNotExist:
+            return Response({'error': 'Article not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        friends = user.friends.all()
+
+        # Get friends who liked this article
+        liked_friends = article.liked_by_users.filter(id__in=friends)
+
+        # Use your UserSerializer (ensure it includes name/userName/userId)
+        serializer = UserSerializer(liked_friends, many=True)
+        return Response(serializer.data)

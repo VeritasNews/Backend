@@ -6,11 +6,12 @@ from .views.userViews import (
     MeView,
     GetUserByIdView,  # Import the new view
     DeleteAllUsersView,  # Import the new view
+    UpdateProfilePictureView,
 )
-from .views.articleViews import ArticleListView, InsertArticlesView, delete_articles, get_articles, get_article_by_id
+from .views.articleViews import PersonalizedArticleListView, ArticleListView, InsertArticlesView, delete_articles, get_articles, get_article_by_id
 from .views.authViews import RegisterView, LoginView
 from .views.likeViews import like_article, unlike_article, get_liked_articles
-from .views.friendViews import FriendsLikedArticlesView, FriendRequestListView, SendFriendRequestView, AcceptFriendRequestView, RejectFriendRequestView, ListFriendsView, SearchUsersView
+from .views.friendViews import FriendsWhoLikedArticleView, FriendsLikedArticlesView, FriendRequestListView, SendFriendRequestView, AcceptFriendRequestView, RejectFriendRequestView, ListFriendsView, SearchUsersView
 
 urlpatterns = [
     # User views
@@ -18,14 +19,15 @@ urlpatterns = [
     path('save_preferences/', SavePreferredCategoriesView.as_view(), name='save_preferences'),
     # path('delete-non-superusers/', DeleteNonSuperusersView.as_view(), name='delete-non-superusers'),  # Add this line
     path('users/delete_all/', DeleteAllUsersView.as_view(), name='delete_all_users'),
-
-
+    path('users/update-profile-picture/', UpdateProfilePictureView.as_view(), name="update-profile-picture"),
+    
     # Article views
     path('articles/', ArticleListView.as_view(), name='article-list'),
     path('insert_articles/', InsertArticlesView.as_view(), name='insert-articles'),
     path('delete_articles/', delete_articles, name='delete-articles'),
     path('get_articles/', get_articles, name='get_articles'),
     path('articles/<int:pk>/', get_article_by_id, name='get_article_by_id'),
+    path("articles/for_you/", PersonalizedArticleListView.as_view()),
 
     # Auth views
     path('register/', RegisterView.as_view(), name='register'),
@@ -46,4 +48,5 @@ urlpatterns = [
     path('users/search/', SearchUsersView.as_view(), name='search-users'),
     path('friends/requests/', FriendRequestListView.as_view(), name='friend-requests'),
     path("articles/friends_liked/", FriendsLikedArticlesView.as_view(), name="friends-liked-articles"),
+    path('articles/<int:article_id>/friends_liked/', FriendsWhoLikedArticleView.as_view(), name='friends-who-liked-article'),
 ]

@@ -42,6 +42,7 @@ class UserSerializer(serializers.ModelSerializer):
             'friends',  # Many-to-Many field
             'notificationsEnabled',
             'privacySettings',
+            'profilePicture',
             'is_active',
             'is_staff',
         ]

@@ -126,3 +126,24 @@ def get_article_by_id(request, pk):
     except Article.DoesNotExist:
         logger.warning(f"Article with ID {pk} not found.")
         return Response({"error": "Article not found."}, status=status.HTTP_404_NOT_FOUND)
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from api.models import Article
+from api.serializers import ArticleSerializer
+
+class PersonalizedArticleListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        preferred_categories = user.preferredCategories or []
+
+        preferred_articles = Article.objects.filter(category__in=preferred_categories)
+        other_articles = Article.objects.exclude(category__in=preferred_categories)
+
+        all_articles = list(preferred_articles) + list(other_articles)
+
+        serializer = ArticleSerializer(all_articles, many=True)
+        return Response(serializer.data)

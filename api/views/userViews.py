@@ -80,3 +80,20 @@ class DeleteAllUsersView(APIView):
                 {"error": "Failed to delete users.", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+from rest_framework.parsers import MultiPartParser, FormParser
+
+class UpdateProfilePictureView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def patch(self, request):
+        user = request.user
+        image = request.FILES.get("profile_picture")  # ✅ This must match the key in FormData
+
+        if not image:
+            return Response({"error": "No image file provided."}, status=400)
+
+        user.profilePicture = image
+        user.save()
+        return Response({"message": "Profile picture updated successfully."})

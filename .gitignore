@@ -3,3 +3,7 @@ _pycache_
 migrations
 api/_pycache_
 api/migrations
+media
+api/__pycache__
+api/views/__pycache__
+backend/__pycache__
