@@ -147,3 +147,93 @@ class PersonalizedArticleListView(APIView):
 
         serializer = ArticleSerializer(all_articles, many=True)
         return Response(serializer.data)
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from api.models import Article, ArticleInteraction
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def log_article_interaction(request):
+    user = request.user
+    data = request.data
+    try:
+        article = Article.objects.get(pk=data['articleId'])
+        interaction = ArticleInteraction.objects.create(
+            user=user,
+            article=article,
+            action=data['action'],
+            time_spent=data.get('time_spent')
+        )
+        return Response({'message': 'Logged'}, status=201)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+   
+def build_features(user, article):
+    categories = [
+        "Siyaset", "Entertainment", "Spor", "Teknoloji", "Saglik", "Cevre", "Bilim", "Egitim",
+        "Ekonomi", "Seyahat", "Moda", "Kultur", "Suc", "Yemek", "YasamTarzi", "IsDunyasi",
+        "DunyaHaberleri", "Oyun", "Otomotiv", "Sanat", "Tarih", "Uzay", "Iliskiler", "Din",
+        "RuhSagligi", "Magazin"
+    ]
+    priorities = ['high', 'medium', 'low']
+
+    category_features = [1 if article.category == c else 0 for c in categories]
+    priority_features = [1 if article.priority == p else 0 for p in priorities]
+
+    is_like = int(article in user.likedArticles.all())
+    is_click = 0
+    is_view = 1
+    is_share = 0
+    time_spent = 0.0
+
+    return [time_spent, is_like, is_click, is_view, is_share] + category_features + priority_features
+
+def extract_user_features(user):
+    # You can later use things like time of day, recent activity, etc.
+    return {}
+
+import os
+import joblib
+
+# Load model from the same directory as this file
+# Load model and expected feature order
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'recommender_model.pkl')
+FEATURE_PATH = os.path.join(os.path.dirname(__file__), 'model_features.pkl')
+
+model = joblib.load(MODEL_PATH)
+feature_columns = joblib.load(FEATURE_PATH)  # list of expected feature names
+
+import numpy as np
+import pandas as pd
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def personalized_feed(request):
+    user = request.user
+    preferred_categories = user.preferredCategories or []
+    articles = Article.objects.all()
+    article_scores = []
+
+    for article in articles:
+        raw_features = build_features(user, article)
+        feature_df = pd.DataFrame([raw_features])
+        feature_df = feature_df.reindex(columns=feature_columns, fill_value=0)
+
+        proba = model.predict_proba(feature_df)[0]
+        score = proba[1] if len(proba) > 1 else 0.0
+
+        # 🚀 Boost for breaking news
+        if article.priority == "high":
+            score += 0.25
+
+        # ❤️ Boost if user prefers this category
+        if article.category in preferred_categories:
+            score += 0.3  # ← tunable boost for preferred categories
+
+        article_scores.append((article, score))
+
+    article_scores.sort(key=lambda x: x[1], reverse=True)
+    top_articles = [a for a, _ in article_scores[:30]]
+    serializer = ArticleSerializer(top_articles, many=True, context={'request': request})
+    return Response(serializer.data)

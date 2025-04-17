@@ -90,3 +90,20 @@ class FriendRequest(models.Model):
 
     def __str__(self):
         return f"{self.from_user.name} ➡️ {self.to_user.name}"
+
+class ArticleInteraction(models.Model):
+    ACTION_CHOICES = [
+        ('view', 'Viewed'),
+        ('like', 'Liked'),
+        ('click', 'Clicked'),
+        ('share', 'Shared'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE)
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    time_spent = models.FloatField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.userName} - {self.article.title} - {self.action}"
