@@ -10,7 +10,24 @@ class ArticleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Article
-        fields = '__all__'  # Or specify manually if needed
+        fields = [
+            'id',
+            'articleId',
+            'title',
+            'summary',
+            'longerSummary',
+            'category',
+            'tags',
+            'source',
+            'location',
+            'popularityScore',
+            'createdAt',
+            'image',
+            'priority',  # 👈 Make sure this is included manually
+            'liked_by_count',
+            'is_liked',
+        ]
+
 
     def get_liked_by_count(self, obj):
         return obj.liked_by_users.count()

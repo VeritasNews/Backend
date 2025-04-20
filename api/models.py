@@ -107,3 +107,21 @@ class ArticleInteraction(models.Model):
 
     def __str__(self):
         return f"{self.user.userName} - {self.article.title} - {self.action}"
+
+class UserArticleScore(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE)
+    score = models.FloatField()
+    priority = models.CharField(max_length=10, choices=[
+        ('most', 'Most'),
+        ('high', 'High'),
+        ('medium', 'Medium'),
+        ('low', 'Low')
+    ])
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'article')
+
+    def __str__(self):
+        return f"{self.user.userName} - {self.article.title} - {self.priority} ({self.score:.2f})"

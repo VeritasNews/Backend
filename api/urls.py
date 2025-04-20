@@ -8,7 +8,7 @@ from .views.userViews import (
     DeleteAllUsersView,  # Import the new view
     UpdateProfilePictureView,
 )
-from .views.articleViews import personalized_feed, log_article_interaction, PersonalizedArticleListView, ArticleListView, InsertArticlesView, delete_articles, get_articles, get_article_by_id
+from .views.articleViews import personalized_feed, log_article_interaction, ArticleListView, InsertArticlesView, delete_articles, get_articles, get_article_by_id
 from .views.authViews import RegisterView, LoginView
 from .views.likeViews import like_article, unlike_article, get_liked_articles
 from .views.friendViews import FriendsWhoLikedArticleView, FriendsLikedArticlesView, FriendRequestListView, SendFriendRequestView, AcceptFriendRequestView, RejectFriendRequestView, ListFriendsView, SearchUsersView
