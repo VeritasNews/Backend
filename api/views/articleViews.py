@@ -84,6 +84,40 @@ class InsertArticlesView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
+from rest_framework.parsers import MultiPartParser, FormParser
+
+class InsertSingleArticleView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, *args, **kwargs):
+        json_data = request.data.get('data')
+        image = request.FILES.get('image')
+
+        try:
+            data = json.loads(json_data)
+
+            article = Article.objects.create(
+                articleId = data.get("articleId", str(uuid.uuid4())),
+                title = data.get("title", ""),
+                summary = data.get("summary", ""),
+                longerSummary = data.get("longerSummary", ""),
+                content = data.get("content", ""),
+                category = data.get("category", ""),
+                tags = data.get("tags", []),
+                source = data.get("source", ""),
+                location = data.get("location", ""),
+                popularityScore = data.get("popularityScore", 0),
+                createdAt = data.get("createdAt", None),
+                priority = data.get("priority", None),
+                image = image
+            )
+
+            return Response({"message": "✅ Article inserted successfully!"}, status=201)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+
 def delete_articles(request, _id=-1):
     """
     Deletes articles based on the given id.
