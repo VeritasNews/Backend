@@ -64,19 +64,21 @@ class RejectFriendRequestView(APIView):
         except FriendRequest.DoesNotExist:
             return Response({'error': 'No friend request found.'}, status=status.HTTP_404_NOT_FOUND)
 
-class FriendRequestListView(APIView):
+class ListFriendsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        incoming_requests = FriendRequest.objects.filter(to_user=request.user, status='pending')
-        
-        data = [{
-            "userId": str(fr.from_user.userId),
-            "name": fr.from_user.name,
-            "userName": fr.from_user.userName,
-            "profilePicture": request.build_absolute_uri(fr.from_user.profilePicture.url) if fr.from_user.profilePicture else None
-        } for fr in incoming_requests]
-
+        user = request.user
+        friends = user.friends.all()
+        data = [
+            {
+                'userId': f.userId,
+                'name': f.name,
+                'userName': f.userName,  # 👈 ADD THIS LINE
+                'email': f.email,
+            }
+            for f in friends
+        ]
         return Response(data)
 
 from rest_framework.views import APIView
@@ -108,14 +110,14 @@ class FriendRequestListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Get all pending friend requests sent *to* the current user
         incoming_requests = FriendRequest.objects.filter(to_user=request.user, status='pending')
         
-        # Return minimal info about the sender (from_user)
+        # Return info about the sender (from_user) including profile picture
         data = [{
             "userId": str(fr.from_user.userId),
             "name": fr.from_user.name,
-            "userName": fr.from_user.userName
+            "userName": fr.from_user.userName,
+            "profilePicture": request.build_absolute_uri(fr.from_user.profilePicture.url) if fr.from_user.profilePicture else None
         } for fr in incoming_requests]
 
         return Response(data)
