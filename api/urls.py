@@ -7,6 +7,8 @@ from .views.userViews import (
     GetUserByIdView,  # Import the new view
     DeleteAllUsersView,  # Import the new view
     UpdateProfilePictureView,
+    public_user_profile,
+    UpdatePrivacySettingsView,
 )
 from .views.articleViews import InsertSingleArticleView, personalized_feed, log_article_interaction, ArticleListView, InsertArticlesView, delete_articles, get_articles, get_article_by_id
 from .views.authViews import RegisterView, LoginView
@@ -20,6 +22,8 @@ urlpatterns = [
     # path('delete-non-superusers/', DeleteNonSuperusersView.as_view(), name='delete-non-superusers'),  # Add this line
     path('users/delete_all/', DeleteAllUsersView.as_view(), name='delete_all_users'),
     path('users/update-profile-picture/', UpdateProfilePictureView.as_view(), name="update-profile-picture"),
+    path("users/<uuid:user_id>/profile/", public_user_profile),
+    path("user/privacy/", UpdatePrivacySettingsView.as_view()),
     
     # Article views
     path('articles/', ArticleListView.as_view(), name='article-list'),
@@ -31,6 +35,7 @@ urlpatterns = [
     path('log-interaction/', log_article_interaction),
     path("articles/for_you/", personalized_feed, name="personalized-feed"),
     path("insert_single_article/", InsertSingleArticleView.as_view(), name="insert_single_article"),
+    
     # Auth views
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),

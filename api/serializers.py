@@ -39,38 +39,61 @@ class ArticleSerializer(serializers.ModelSerializer):
         return False
 
 
+
+class PrivacySettingsSerializer(serializers.Serializer):
+    liked_articles = serializers.ChoiceField(choices=['public', 'friends', 'private'])
+    reading_history = serializers.ChoiceField(choices=['public', 'friends', 'private'])
+    friends_list = serializers.ChoiceField(choices=['public', 'friends', 'private'])
+    profile_info = serializers.ChoiceField(choices=['public', 'friends', 'private'])
+    activity_status = serializers.ChoiceField(choices=['public', 'friends', 'private'])
+
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
         fields = [
-            'userId',  # Include the UUID field
-            'userName',
-            'name',
-            'email',
-            'password',
-            'socialMediaId',
-            'preferredCategories',
-            'location',
-            'isPremium',
-            'likedArticles',  # Many-to-Many field
-            'readingHistory',  # Many-to-Many field
-            'friends',  # Many-to-Many field
-            'notificationsEnabled',
-            'privacySettings',
-            'profilePicture',
-            'is_active',
-            'is_staff',
+            'userId', 'userName', 'name', 'email', 'password',
+            'socialMediaId', 'preferredCategories', 'location', 'isPremium',
+            'likedArticles', 'readingHistory', 'friends', 'notificationsEnabled',
+            'privacySettings', 'profilePicture', 'is_active', 'is_staff',
         ]
 
     def create(self, validated_data):
-        # Extract the password and remove it from the validated data
         password = validated_data.pop('password')
-
-        # Create the user
-        user = User.objects.create_user(
-            **validated_data,  # Pass all other fields
-            password=password,  # Set the password separately
-        )
+        user = User.objects.create_user(**validated_data, password=password)
         return user
+
+    def _can_view_field(self, field_name, target_user):
+        request = self.context.get("request")
+        if not request or not hasattr(request, "user"):
+            return False
+        viewer = request.user
+        privacy_level = target_user.privacySettings.get(field_name, 'private')
+
+        if viewer == target_user:
+            return True
+        elif privacy_level == 'public':
+            return True
+        elif privacy_level == 'friends' and viewer in target_user.friends.all():
+            return True
+        return False
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        if not self._can_view_field('liked_articles', instance):
+            data['likedArticles'] = []
+
+        if not self._can_view_field('reading_history', instance):
+            data['readingHistory'] = []
+
+        if not self._can_view_field('friends_list', instance):
+            data['friends'] = []
+
+        if not self._can_view_field('profile_info', instance):
+            data['email'] = None
+            data['location'] = None
+            data['preferredCategories'] = []
+
+        return data

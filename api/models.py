@@ -2,9 +2,17 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 import uuid
 
-# ✅ Move this function OUTSIDE the class
-# def generate_unique_guest_username():
-#     return f"guest_{uuid.uuid4()}"
+def generate_unique_guest_username():
+    return f"guest_{uuid.uuid4().hex[:10]}"
+
+def default_privacy():
+    return {
+        'liked_articles': 'friends',
+        'reading_history': 'private',
+        'friends_list': 'public',
+        'profile_info': 'public',
+        'activity_status': 'friends'
+    }
 
 class Article(models.Model):
     articleId = models.CharField(max_length=100, unique=True, null=True, blank=True)
@@ -39,10 +47,6 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_superuser", True)
         return self.create_user(email, name, password, **extra_fields)
 
-def generate_unique_guest_username():
-    import uuid
-    return f"guest_{uuid.uuid4().hex[:10]}"
-
 class User(AbstractBaseUser, PermissionsMixin):
     userId = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     userName = models.CharField(max_length=255, unique=True)
@@ -58,8 +62,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     readingHistory = models.ManyToManyField(Article, related_name="reading_history", blank=True)
     friends = models.ManyToManyField("self", blank=True)
     notificationsEnabled = models.BooleanField(default=True)
-    privacySettings = models.JSONField(default=dict)
-    
+    privacySettings = models.JSONField(default=default_privacy)
+
     profilePicture = models.ImageField(upload_to="profile_picture/", null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
@@ -72,6 +76,17 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.name
+
+
+# serializers.py
+from rest_framework import serializers
+
+class PrivacySettingsSerializer(serializers.Serializer):
+    liked_articles = serializers.ChoiceField(choices=['public', 'friends', 'private'])
+    reading_history = serializers.ChoiceField(choices=['public', 'friends', 'private'])
+    friends_list = serializers.ChoiceField(choices=['public', 'friends', 'private'])
+    profile_info = serializers.ChoiceField(choices=['public', 'friends', 'private'])
+    activity_status = serializers.ChoiceField(choices=['public', 'friends', 'private'])
 
 from django.conf import settings
 

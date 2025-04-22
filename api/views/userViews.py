@@ -97,3 +97,46 @@ class UpdateProfilePictureView(APIView):
         user.profilePicture = image
         user.save()
         return Response({"message": "Profile picture updated successfully."})
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from api.models import User
+from api.serializers import UserSerializer
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])  # Users must be logged in to view others
+def public_user_profile(request, user_id):
+    try:
+        target_user = User.objects.prefetch_related(
+            "likedArticles", "readingHistory", "friends"
+        ).get(userId=user_id)
+    except User.DoesNotExist:
+        return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = UserSerializer(target_user, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+# views.py
+
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from api.serializers import PrivacySettingsSerializer  # 👈 PLACE THIS HERE
+
+class UpdatePrivacySettingsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        serializer = PrivacySettingsSerializer(data=request.data.get("privacySettings", {}))
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+
+        user = request.user
+        user.privacySettings.update(serializer.validated_data)
+        user.save()
+
+        return Response({"message": "Privacy settings updated!"})
