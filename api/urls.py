@@ -9,7 +9,7 @@ from .views.userViews import (
     UpdateProfilePictureView,
 )
 from .views.articleViews import InsertSingleArticleView, personalized_feed, log_article_interaction, ArticleListView, InsertArticlesView, delete_articles, get_articles, get_article_by_id
-from .views.authViews import RegisterView, LoginView
+from .views.authViews import RegisterView, LoginView, PasswordResetRequestView, PasswordResetConfirmView
 from .views.likeViews import like_article, unlike_article, get_liked_articles
 from .views.friendViews import CombinedSearchView, FriendsWhoLikedArticleView, FriendsLikedArticlesView, FriendRequestListView, SendFriendRequestView, AcceptFriendRequestView, RejectFriendRequestView, ListFriendsView, SearchUsersView
 
@@ -31,9 +31,12 @@ urlpatterns = [
     path('log-interaction/', log_article_interaction),
     path("articles/for_you/", personalized_feed, name="personalized-feed"),
     path("insert_single_article/", InsertSingleArticleView.as_view(), name="insert_single_article"),
+    
     # Auth views
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
+    path('password-reset/', PasswordResetRequestView.as_view(), name='password-reset-request'),
+    path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     
     # Like views
     path('articles/<str:article_id>/like/', like_article, name='like_article'),
