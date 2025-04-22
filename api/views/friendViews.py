@@ -103,6 +103,34 @@ class SearchUsersView(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q
+
+from api.models import User, Article
+from api.serializers import UserSerializer, ArticleSerializer
+
+class CombinedSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = request.GET.get("q", "")
+        user = request.user
+
+        users = User.objects.filter(
+            Q(name__icontains=query) | Q(userName__icontains=query)
+        ).exclude(id=user.id)
+
+        articles = Article.objects.filter(
+            Q(title__icontains=query) | Q(summary__icontains=query)
+        )
+
+        return Response({
+            "users": UserSerializer(users, many=True).data,
+            "articles": ArticleSerializer(articles, many=True).data
+        })
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from api.models import FriendRequest
 from api.serializers import UserSerializer  # Make sure this includes userId, name, userName
 

@@ -11,7 +11,7 @@ from .views.userViews import (
 from .views.articleViews import InsertSingleArticleView, personalized_feed, log_article_interaction, ArticleListView, InsertArticlesView, delete_articles, get_articles, get_article_by_id
 from .views.authViews import RegisterView, LoginView
 from .views.likeViews import like_article, unlike_article, get_liked_articles
-from .views.friendViews import FriendsWhoLikedArticleView, FriendsLikedArticlesView, FriendRequestListView, SendFriendRequestView, AcceptFriendRequestView, RejectFriendRequestView, ListFriendsView, SearchUsersView
+from .views.friendViews import CombinedSearchView, FriendsWhoLikedArticleView, FriendsLikedArticlesView, FriendRequestListView, SendFriendRequestView, AcceptFriendRequestView, RejectFriendRequestView, ListFriendsView, SearchUsersView
 
 urlpatterns = [
     # User views
@@ -51,4 +51,5 @@ urlpatterns = [
     path('friends/requests/', FriendRequestListView.as_view(), name='friend-requests'),
     path("articles/friends_liked/", FriendsLikedArticlesView.as_view(), name="friends-liked-articles"),
     path('articles/<int:article_id>/friends_liked/', FriendsWhoLikedArticleView.as_view(), name='friends-who-liked-article'),
+    path('search/', CombinedSearchView.as_view(), name='combined-search'),
 ]
