@@ -428,7 +428,7 @@ def personalized_feed(request):
 
     # Build response from scored articles
     top_articles = []
-    for score_obj in scores[:30]:  # Top 30 personalized
+    for score_obj in scores:  # Top 30 personalized
         article_data = ArticleSerializer(score_obj.article, context={'request': request}).data
         article_data['personalized_priority'] = score_obj.priority
         article_data['relevance_score'] = float(score_obj.score)
