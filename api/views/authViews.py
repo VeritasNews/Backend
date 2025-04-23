@@ -9,6 +9,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.template.exceptions import TemplateDoesNotExist
 from django.conf import settings
 import os
 
@@ -68,8 +69,8 @@ class PasswordResetRequestView(APIView):
             
         user = User.objects.filter(email=email).first()
         
+        # Don't reveal whether a user exists or not for security
         if not user:
-            # Don't reveal whether a user exists or not for security
             return Response(
                 {'success': True, 'message': 'If your email is registered, you will receive a password reset link.'},
                 status=status.HTTP_200_OK
@@ -86,16 +87,18 @@ class PasswordResetRequestView(APIView):
         
         # Prepare email
         email_subject = "Reset your Veritas News password"
-        email_body = render_to_string('password_reset_email.html', {
-            'user': user,
-            'reset_link': reset_link,
-            'fallback_link': fallback_link,
-            'uid': uid,
-            'token': token,
-        })
         
-        # If templates directory doesn't exist or template isn't found, use a simple text email instead
-        if not os.path.exists(os.path.join(settings.BASE_DIR, 'templates', 'password_reset_email.html')):
+        try:
+            # Use the template if it exists
+            email_body = render_to_string('password_reset_email.html', {
+                'user': user,
+                'reset_link': reset_link,
+                'fallback_link': fallback_link,
+                'uid': uid,
+                'token': token,
+            })
+        except TemplateDoesNotExist:
+            # Fallback to basic text email
             email_body = f"""
             Hello {user.name},
             
