@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 from .views.userViews import (
     ListUsersView,
     SavePreferredCategoriesView,
@@ -14,6 +14,17 @@ from .views.articleViews import InsertSingleArticleView, personalized_feed, log_
 from .views.authViews import RegisterView, LoginView, PasswordResetRequestView, PasswordResetConfirmView
 from .views.likeViews import like_article, unlike_article, get_liked_articles
 from .views.friendViews import CombinedSearchView, FriendsWhoLikedArticleView, FriendsLikedArticlesView, FriendRequestListView, SendFriendRequestView, AcceptFriendRequestView, RejectFriendRequestView, ListFriendsView, SearchUsersView
+from django.views.generic import TemplateView
+
+class PasswordResetRedirectView(TemplateView):
+    template_name = 'password_reset_redirect.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['uid'] = self.kwargs.get('uid')
+        context['token'] = self.kwargs.get('token')
+        context['deep_link'] = f"veritasnews://reset-password/{context['uid']}/{context['token']}"
+        return context
 
 urlpatterns = [
     # User views
@@ -41,6 +52,10 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('password-reset/', PasswordResetRequestView.as_view(), name='password-reset-request'),
     path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
+    
+    re_path(r'^reset-password/(?P<uid>[\w-]+)/(?P<token>[\w-]+)/$', 
+            PasswordResetRedirectView.as_view(), 
+            name='password-reset-redirect'),
     
     # Like views
     path('articles/<str:article_id>/like/', like_article, name='like_article'),
