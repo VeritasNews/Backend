@@ -80,10 +80,9 @@ class PasswordResetRequestView(APIView):
         token = default_token_generator.make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         
-        # Create reset link (for mobile deep linking)
-        reset_link = f"veritasnews://reset-password/{uid}/{token}"
-        # For development on localhost
-        fallback_link = f"http://localhost:8000/reset-password/{uid}/{token}"
+        # Create reset links
+        mobile_deep_link = f"veritasnews://reset-password/{uid}/{token}"
+        web_url = f"http://localhost:8000/api/reset-password/{uid}/{token}/"
         
         # Prepare email
         email_subject = "Reset your Veritas News password"
@@ -92,8 +91,7 @@ class PasswordResetRequestView(APIView):
             # Use the template if it exists
             email_body = render_to_string('password_reset_email.html', {
                 'user': user,
-                'reset_link': reset_link,
-                'fallback_link': fallback_link,
+                'reset_link': mobile_deep_link,
                 'uid': uid,
                 'token': token,
             })
@@ -105,10 +103,10 @@ class PasswordResetRequestView(APIView):
             You're receiving this email because you requested a password reset for your Veritas News account.
             
             Please click on the following link to reset your password:
-            {reset_link}
+            {mobile_deep_link}
             
             If the link doesn't work, copy and paste this URL into your browser:
-            {fallback_link}
+            {web_url}
             
             If you didn't request this, you can safely ignore this email.
             
@@ -132,6 +130,7 @@ class PasswordResetRequestView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
+        # Always return a success response to the frontend
         return Response(
             {'success': True, 'message': 'Password reset email has been sent.'},
             status=status.HTTP_200_OK
