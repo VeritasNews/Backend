@@ -10,6 +10,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.template.exceptions import TemplateDoesNotExist
+from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings
 import os
 
