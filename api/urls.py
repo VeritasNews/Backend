@@ -54,8 +54,8 @@ urlpatterns = [
     path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     
     re_path(r'^reset-password/(?P<uid>[\w-]+)/(?P<token>[\w-]+)/$', 
-            PasswordResetRedirectView.as_view(), 
-            name='password-reset-redirect'),
+        PasswordResetRedirectView.as_view(), 
+        name='password-reset-redirect'),
     
     # Like views
     path('articles/<str:article_id>/like/', like_article, name='like_article'),
