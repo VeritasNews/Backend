@@ -69,6 +69,7 @@ class PasswordResetRequestView(APIView):
             
         user = User.objects.filter(email=email).first()
         
+        # Don't reveal whether a user exists or not for security
         if not user:
             return Response(
                 {'success': True, 'message': 'If your email is registered, you will receive a password reset link.'},
@@ -79,13 +80,15 @@ class PasswordResetRequestView(APIView):
         token = default_token_generator.make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         
+        # Create reset links
         mobile_deep_link = f"veritasnews://reset-password/{uid}/{token}"
-        
         web_url = f"http://localhost:8000/api/reset-password/{uid}/{token}/"
         
+        # Prepare email
         email_subject = "Reset your Veritas News password"
         
         try:
+            # Use the template if it exists
             email_body = render_to_string('password_reset_email.html', {
                 'user': user,
                 'reset_link': mobile_deep_link,
@@ -93,16 +96,17 @@ class PasswordResetRequestView(APIView):
                 'token': token,
             })
         except TemplateDoesNotExist:
+            # Fallback to basic text email
             email_body = f"""
             Hello {user.name},
             
             You're receiving this email because you requested a password reset for your Veritas News account.
             
             Please click on the following link to reset your password:
-            {mobile_deep_link}
-            
-            If the link doesn't work, copy and paste this URL into your browser:
             {web_url}
+            
+            If you're using the mobile app, you can use this link:
+            {mobile_deep_link}
             
             If you didn't request this, you can safely ignore this email.
             
@@ -110,6 +114,7 @@ class PasswordResetRequestView(APIView):
             The Veritas News Team
             """
         
+        # Send email
         try:
             send_mail(
                 email_subject,
@@ -125,6 +130,7 @@ class PasswordResetRequestView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
+        # Always return a success response to the frontend
         return Response(
             {'success': True, 'message': 'Password reset email has been sent.'},
             status=status.HTTP_200_OK
