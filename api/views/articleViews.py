@@ -13,11 +13,20 @@ from api.serializers import ArticleSerializer
 
 logger = logging.getLogger(__name__)
 
+from api.utils.news_ranker import rank_articles
+
 class ArticleListView(APIView):
     def get(self, request, *args, **kwargs):
-        articles = Article.objects.all()  # Get all articles
+        articles = list(Article.objects.all())  # Get all
+        rankings = rank_articles(articles, genre="politics", country="TR")
+        score_map = {r["id"]: r["score"] for r in rankings}
+
+        # Sort by score
+        articles.sort(key=lambda a: score_map.get(str(a.articleId), 0), reverse=True)
+
         serializer = ArticleSerializer(articles, many=True, context={'request': request})
-        return Response(serializer.data)  # Return serialized data as a response
+        return Response(serializer.data)
+
 
 # Directory path for JSON files
 GENERATED_ARTICLES_DIR = r"C:\Users\zeyne\Desktop\bitirme\VeritasNews\News-Objectify\objectified_jsons"
@@ -139,21 +148,54 @@ def delete_articles(request, _id=-1):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
 
+import requests
+from api.models import Article
+from api.serializers import ArticleSerializer
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+RANKING_API_URL = "http://127.0.0.1:8000/v1/rank"
+
 @api_view(['GET'])
 def get_articles(request):
-    category = request.GET.get('category', None)  # Get category from query
+    category = request.GET.get('category', None)
 
+    articles = Article.objects.all()
     if category:
-        category = category.strip()  # Remove extra spaces
-        logger.info(f"Filtering by category: '{category}'")  # Log category
-        articles = Article.objects.filter(category__iexact=category)  # Case-insensitive filtering
-    else:
-        articles = Article.objects.all()
+        articles = articles.filter(category__iexact=category)
 
-    # Log only the count of articles being returned
-    logger.info(f"Returning {articles.count()} articles.")
     serializer = ArticleSerializer(articles, many=True)
-    return Response(serializer.data)
+    serialized_data = serializer.data
+
+    # Prepare payload for FastAPI ranking
+    ranking_payload = [
+        {
+            "id": str(a["articleId"]),
+            "title": a["title"] or "",
+            "body": a["longerSummary"] or a["summary"] or "",
+            "source_score": 0.8,
+            "published_at": a["createdAt"] or "2025-01-01T00:00:00Z",
+            "clicks": a["popularityScore"] or 0,
+            "shares": a.get("liked_by_count", 0)
+        }
+        for a in serialized_data
+    ]
+
+    try:
+        rank_response = requests.post(RANKING_API_URL, json=ranking_payload, params={
+            "genre": category,
+            "country": "TR"
+        })
+        rank_data = rank_response.json()
+        score_map = {r["id"]: r["score"] for r in rank_data}
+        # Sort original data by score
+        sorted_articles = sorted(serialized_data, key=lambda a: score_map.get(str(a["articleId"]), 0), reverse=True)
+        return Response(sorted_articles)
+
+    except Exception as e:
+        print("⚠️ Ranking API failed:", str(e))
+        return Response(serialized_data)
+
 
 @api_view(['GET'])
 def get_article_by_id(request, pk):
