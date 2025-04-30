@@ -52,12 +52,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = [
-            'userId', 'userName', 'name', 'email', 'password',
-            'socialMediaId', 'preferredCategories', 'location', 'isPremium',
-            'likedArticles', 'readingHistory', 'friends', 'notificationsEnabled',
-            'privacySettings', 'profilePicture', 'is_active', 'is_staff',
-        ]
+        fields = '__all__'  # or make sure 'preferredCategories' is listed in fields
 
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -91,9 +86,12 @@ class UserSerializer(serializers.ModelSerializer):
         if not self._can_view_field('friends_list', instance):
             data['friends'] = []
 
-        if not self._can_view_field('profile_info', instance):
+        request = self.context.get("request")
+        viewer = getattr(request, "user", None)
+
+        # 🔓 Allow user to see their own profile info
+        if not self._can_view_field('profile_info', instance) and viewer != instance:
             data['email'] = None
             data['location'] = None
-            data['preferredCategories'] = []
 
         return data
