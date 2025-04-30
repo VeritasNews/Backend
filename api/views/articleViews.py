@@ -13,11 +13,20 @@ from api.serializers import ArticleSerializer
 
 logger = logging.getLogger(__name__)
 
+from api.utils.news_ranker import rank_articles
+
 class ArticleListView(APIView):
     def get(self, request, *args, **kwargs):
-        articles = Article.objects.all()  # Get all articles
+        articles = list(Article.objects.all())  # Get all
+        rankings = rank_articles(articles, genre="politics", country="TR")
+        score_map = {r["id"]: r["score"] for r in rankings}
+
+        # Sort by score
+        articles.sort(key=lambda a: score_map.get(str(a.articleId), 0), reverse=True)
+
         serializer = ArticleSerializer(articles, many=True, context={'request': request})
-        return Response(serializer.data)  # Return serialized data as a response
+        return Response(serializer.data)
+
 
 # Directory path for JSON files
 GENERATED_ARTICLES_DIR = r"C:\Users\zeyne\Desktop\bitirme\VeritasNews\News-Objectify\objectified_jsons"
@@ -139,21 +148,54 @@ def delete_articles(request, _id=-1):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
 
+import requests
+from api.models import Article
+from api.serializers import ArticleSerializer
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+RANKING_API_URL = "http://localhost:8001/v1/rank"
+
 @api_view(['GET'])
 def get_articles(request):
-    category = request.GET.get('category', None)  # Get category from query
+    category = request.GET.get('category', None)
 
+    articles = Article.objects.all()
     if category:
-        category = category.strip()  # Remove extra spaces
-        logger.info(f"Filtering by category: '{category}'")  # Log category
-        articles = Article.objects.filter(category__iexact=category)  # Case-insensitive filtering
-    else:
-        articles = Article.objects.all()
+        articles = articles.filter(category__iexact=category)
 
-    # Log only the count of articles being returned
-    logger.info(f"Returning {articles.count()} articles.")
     serializer = ArticleSerializer(articles, many=True)
-    return Response(serializer.data)
+    serialized_data = serializer.data
+
+    # Prepare payload for FastAPI ranking
+    ranking_payload = [
+        {
+            "id": str(a["articleId"]),
+            "title": a["title"] or "",
+            "body": a["longerSummary"] or a["summary"] or "",
+            "source_score": 0.8,
+            "published_at": a["createdAt"] or "2025-01-01T00:00:00Z",
+            "clicks": a["popularityScore"] or 0,
+            "shares": a.get("liked_by_count", 0)
+        }
+        for a in serialized_data
+    ]
+
+    try:
+        rank_response = requests.post(RANKING_API_URL, json=ranking_payload, params={
+            "genre": category,
+            "country": "TR"
+        })
+        rank_data = rank_response.json()
+        score_map = {r["id"]: r["score"] for r in rank_data}
+        # Sort original data by score
+        sorted_articles = sorted(serialized_data, key=lambda a: score_map.get(str(a["articleId"]), 0), reverse=True)
+        return Response(sorted_articles)
+
+    except Exception as e:
+        print("⚠️ Ranking API failed:", str(e))
+        return Response(serialized_data)
+
 
 @api_view(['GET'])
 def get_article_by_id(request, pk):
@@ -205,15 +247,25 @@ def log_article_interaction(request):
             time_spent=data.get('time_spent')
         )
 
+        # ✅ Recalculate popularity score after new interaction
+        views = ArticleInteraction.objects.filter(article=article, action='view').count()
+        likes = ArticleInteraction.objects.filter(article=article, action='like').count()
+        clicks = ArticleInteraction.objects.filter(article=article, action='click').count()
+        shares = ArticleInteraction.objects.filter(article=article, action='share').count()
+
+        # 🧠 Weighted popularity score formula (adjust weights as needed)
+        score = views + (2 * likes) + (1.5 * clicks) + (3 * shares)
+        article.popularityScore = int(score)
+        article.save()
+
         # ✅ Trigger model retraining script
         from subprocess import Popen
         import sys
         import os
-
-        script_path = os.path.join(os.path.dirname(__file__), 'article_priorization.py')
-        # log timestamp in cache/db
         from django.core.cache import cache
         from datetime import datetime, timedelta
+
+        script_path = os.path.join(os.path.dirname(__file__), 'article_priorization.py')
 
         last_run = cache.get("last_model_training", None)
         now = datetime.now()
@@ -222,11 +274,11 @@ def log_article_interaction(request):
             cache.set("last_model_training", now, timeout=600)
             Popen([sys.executable, script_path])
 
-
-        return Response({'message': 'Logged & retraining triggered ✅'}, status=201)
+        return Response({'message': 'Logged, score updated, & retraining triggered ✅'}, status=201)
 
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+
 
 # 🧠 FIXED: build_features — includes user preferences
 from django.db import models
@@ -389,49 +441,70 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from api.models import Article, UserArticleScore
 from api.serializers import ArticleSerializer
+import requests
+
+RANKING_API_URL = "http://localhost:8001/v1/rank"
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def personalized_feed(request):
     user = request.user
-    assign_priority(user)  # Re-score on access for freshness
+    all_articles = Article.objects.all()
 
-    # Always get breaking news first
-    breaking_news_scores = UserArticleScore.objects.filter(
-        user=user, 
-        priority="most"
-    ).order_by('-score')
-    
-    # Then get other articles
-    regular_scores = UserArticleScore.objects.filter(
-        user=user
-    ).exclude(priority="most").order_by('-score')
-    
-    # Combine them with breaking news always on top
-    scores = list(breaking_news_scores) + list(regular_scores)
-    
-    # Optional filters 
-    category_filter = request.GET.get('category')
-    priority_filter = request.GET.get('priority')
+    # ML scores from DB
+    scored_qs = UserArticleScore.objects.filter(user=user)
+    ml_scores = {s.article.articleId: s.score for s in scored_qs}
+    ml_priorities = {s.article.articleId: s.priority for s in scored_qs}
 
-    if category_filter:
-        scores = [s for s in scores if s.article.category == category_filter.strip()]
+    # Send ALL to FastAPI
+    payload = [
+        {
+            "id": str(a.articleId),
+            "title": a.title or "",
+            "body": a.longerSummary or a.summary or "",
+            "source_score": 0.8,
+            "published_at": a.createdAt.isoformat() if a.createdAt else "2025-01-01T00:00:00Z",
+            "clicks": a.popularityScore or 0,
+            "shares": 0
+        }
+        for a in all_articles
+    ]
 
-    if priority_filter:
-        scores = [s for s in scores if s.priority == priority_filter.strip()]
+    try:
+        res = requests.post(
+            "http://localhost:8001/v1/rank",
+            json=payload,
+            params={"genre": "politics", "country": "TR"},
+            timeout=5
+        )
+        fastapi_scores = {r["id"]: r["score"] for r in res.json()}
+    except Exception as e:
+        print("⚠️ FastAPI ranker failed:", str(e))
+        fastapi_scores = {}
 
-    # Fallback logic: return latest articles if nothing is scored
-    if not scores:
-        fallback_articles = Article.objects.all().order_by('-createdAt')[:20]
-        serialized = ArticleSerializer(fallback_articles, many=True, context={'request': request})
-        return Response(serialized.data)
+    # Combine ML and FastAPI
+    combined = []
+    for article in all_articles:
+        article_id = str(article.articleId)
+        ml_score = ml_scores.get(article_id, 0.5)
+        fastapi_score = fastapi_scores.get(article_id, 0.5)
+        final_score = (0.7 * ml_score) + (0.3 * fastapi_score)
+        priority = ml_priorities.get(article_id, "low")
 
-    # Build response from scored articles
-    top_articles = []
-    for score_obj in scores:  # Top 30 personalized
-        article_data = ArticleSerializer(score_obj.article, context={'request': request}).data
-        article_data['personalized_priority'] = score_obj.priority
-        article_data['relevance_score'] = float(score_obj.score)
-        top_articles.append(article_data)
+        art_data = ArticleSerializer(article, context={'request': request}).data
+        art_data['relevance_score'] = round(final_score, 4)
+        art_data['personalized_priority'] = priority
+        combined.append(art_data)
 
-    return Response(top_articles)
+    # Apply filters
+    category = request.GET.get("category")
+    priority = request.GET.get("priority")
+
+    if category:
+        combined = [a for a in combined if a.get("category") == category]
+    if priority:
+        combined = [a for a in combined if a.get("personalized_priority") == priority]
+
+    # Sort by hybrid relevance
+    combined.sort(key=lambda x: x["relevance_score"], reverse=True)
+    return Response(combined)
