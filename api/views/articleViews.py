@@ -442,12 +442,16 @@ from rest_framework.response import Response
 from api.models import Article, UserArticleScore
 from api.serializers import ArticleSerializer
 import requests
+from datetime import datetime, timedelta
 
 RANKING_API_URL = "http://localhost:8001/v1/rank"
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def personalized_feed(request):
+    from datetime import datetime, timezone
+    import numpy as np
+
     user = request.user
     all_articles = Article.objects.all()
 
@@ -484,17 +488,51 @@ def personalized_feed(request):
 
     # Combine ML and FastAPI
     combined = []
+    most_article_id = None
+    highest_score = -1
+
     for article in all_articles:
         article_id = str(article.articleId)
         ml_score = ml_scores.get(article_id, 0.5)
         fastapi_score = fastapi_scores.get(article_id, 0.5)
-        final_score = (0.7 * ml_score) + (0.3 * fastapi_score)
+
+        created_at = article.createdAt
+        if not isinstance(created_at, datetime):
+            try:
+                created_at = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+            except Exception:
+                created_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
+
+        hours_since_pub = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
+        recency_weight = np.exp(-hours_since_pub / 6)
+
+        hybrid_score = ((0.3 * ml_score + 0.2 * fastapi_score) + (0.5 * recency_weight))
+
+        is_recent = hours_since_pub < 2
+        is_high_score = hybrid_score > 0.85
+        is_politics = (article.category or "").lower() == "siyaset"
+
+        if is_recent and is_high_score and is_politics and hybrid_score > highest_score:
+            most_article_id = article_id
+            highest_score = hybrid_score
+
         priority = ml_priorities.get(article_id, "low")
 
+        title_lower = (article.title or "").strip().lower()
+        if title_lower in {"error", "failed to generate"}:
+            continue  # 🚫 skip bad articles
+
         art_data = ArticleSerializer(article, context={'request': request}).data
-        art_data['relevance_score'] = round(final_score, 4)
+        art_data['relevance_score'] = round(hybrid_score, 4)
         art_data['personalized_priority'] = priority
         combined.append(art_data)
+
+
+    # Apply "most" to just one article if conditions matched
+    if most_article_id:
+        for a in combined:
+            if str(a["articleId"]) == most_article_id:
+                a["personalized_priority"] = "most"
 
     # Apply filters
     category = request.GET.get("category")
@@ -506,5 +544,12 @@ def personalized_feed(request):
         combined = [a for a in combined if a.get("personalized_priority") == priority]
 
     # Sort by hybrid relevance
-    combined.sort(key=lambda x: x["relevance_score"], reverse=True)
+    combined.sort(
+        key=lambda x: (
+            round(float(x["relevance_score"]), 4),
+            datetime.fromisoformat(x["createdAt"].replace("Z", "+00:00")) if x.get("createdAt") else datetime.min
+        ),
+        reverse=True
+    )
+
     return Response(combined)
