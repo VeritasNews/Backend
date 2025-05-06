@@ -54,7 +54,7 @@ def severity_predict(text: str, genre: str | None) -> float:
 
 HOT_TOPICS = {
     "1 mayıs", "taksim", "kadıköy", "anayasa", "gençlik",
-    "deprem", "ekonomi", "enflasyon", "gazze", "öğrenci", "sırrı süreyya",
+    "deprem", "ekonomi", "enflasyon", "gazze", "öğrenci", "özgür özel", "erdoğan", "önder"
 }
 def topic_trend_boost(text: str) -> float:
     lowered = text.lower()
