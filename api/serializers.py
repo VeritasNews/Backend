@@ -30,7 +30,9 @@ class ArticleSerializer(serializers.ModelSerializer):
 
 
     def get_liked_by_count(self, obj):
-        return obj.liked_by_users.count()
+        if hasattr(obj, 'liked_by_users'):
+            return obj.liked_by_users.count()
+        return 0  # fallback if running on dict-like data
 
     def get_is_liked(self, obj):
         request = self.context.get('request')

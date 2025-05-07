@@ -458,7 +458,10 @@ def personalized_feed(request):
     import numpy as np
 
     user = request.user
-    all_articles = Article.objects.all()
+    all_articles = Article.objects.all()[:100]  # just top 100 for now
+
+    #TODO
+    # all_articles = Article.objects.all()
 
     # ML scores from DB
     scored_qs = UserArticleScore.objects.filter(user=user)
@@ -481,14 +484,19 @@ def personalized_feed(request):
 
     try:
         res = requests.post(
-            "https://ranker-service.onrender.com/v1/rank",
+            RANKING_API_URL,
             json=payload,
             params={"genre": "politics", "country": "TR"},
             timeout=5
         )
-        fastapi_scores = {r["id"]: r["score"] for r in res.json()}
+        try:
+            rank_data = res.json()
+            fastapi_scores = {r["id"]: r["score"] for r in rank_data}
+        except Exception as json_error:
+            print("⚠️ Failed to parse ranking response:", json_error)
+            fastapi_scores = {}
     except Exception as e:
-        print("⚠️ FastAPI ranker failed:", str(e))
+        print("⚠️ FastAPI ranker request failed:", str(e))
         fastapi_scores = {}
 
     # Combine ML and FastAPI
