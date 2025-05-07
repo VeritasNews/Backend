@@ -1,7 +1,7 @@
 # api/utils/news_ranker.py
 import requests
 
-FASTAPI_RANKING_URL = "http://localhost:8001/v1/rank"  # Update if hosted elsewhere
+FASTAPI_RANKING_URL = "https://ranker-service.onrender.com/v1/rank"
 
 def rank_articles(articles, genre="politics", country="TR"):
     payload = [
