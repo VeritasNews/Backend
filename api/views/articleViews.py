@@ -18,11 +18,11 @@ from api.utils.news_ranker import rank_articles
 
 class ArticleListView(APIView):
     def get(self, request, *args, **kwargs):
+        # In articleViews.py → ArticleListView or wherever you query Articles
         articles = list(
-            Article.objects.annotate(
-                liked_count=Count("liked_by_users")
-            )
-        )  # Get all
+            Article.objects.all().prefetch_related('liked_by_users')
+        )
+
         rankings = rank_articles(articles, genre="politics", country="TR")
         score_map = {r["id"]: r["score"] for r in rankings}
 
