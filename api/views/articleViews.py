@@ -10,7 +10,6 @@ import logging
 from rest_framework import status
 from api.models import Article
 from api.serializers import ArticleSerializer
-from django.db.models import Count
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +17,7 @@ from api.utils.news_ranker import rank_articles
 
 class ArticleListView(APIView):
     def get(self, request, *args, **kwargs):
-        # In articleViews.py → ArticleListView or wherever you query Articles
-        articles = list(
-            Article.objects.all().prefetch_related('liked_by_users')
-        )
-
+        articles = list(Article.objects.all())  # Get all
         rankings = rank_articles(articles, genre="politics", country="TR")
         score_map = {r["id"]: r["score"] for r in rankings}
 
@@ -458,10 +453,7 @@ def personalized_feed(request):
     import numpy as np
 
     user = request.user
-    all_articles = Article.objects.all()[:100]  # just top 100 for now
-
-    #TODO
-    # all_articles = Article.objects.all()
+    all_articles = Article.objects.all()
 
     # ML scores from DB
     scored_qs = UserArticleScore.objects.filter(user=user)
@@ -484,19 +476,14 @@ def personalized_feed(request):
 
     try:
         res = requests.post(
-            RANKING_API_URL,
+            "https://ranker-service.onrender.com/v1/rank",
             json=payload,
             params={"genre": "politics", "country": "TR"},
             timeout=5
         )
-        try:
-            rank_data = res.json()
-            fastapi_scores = {r["id"]: r["score"] for r in rank_data}
-        except Exception as json_error:
-            print("⚠️ Failed to parse ranking response:", json_error)
-            fastapi_scores = {}
+        fastapi_scores = {r["id"]: r["score"] for r in res.json()}
     except Exception as e:
-        print("⚠️ FastAPI ranker request failed:", str(e))
+        print("⚠️ FastAPI ranker failed:", str(e))
         fastapi_scores = {}
 
     # Combine ML and FastAPI

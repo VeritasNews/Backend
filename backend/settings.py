@@ -173,11 +173,11 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:19006",  # React Native Expo
-    "http://127.0.0.1:8000",   # Django Server
-    "https://backend-r8mw.onrender.com",
-]
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:19006",  # React Native Expo
+#     "http://127.0.0.1:8000",   # Django Server
+#     "https://backend-r8mw.onrender.com",
+# ]
 
 CORS_ALLOW_ALL_ORIGINS = True  # Change this to specific origins later for security
 

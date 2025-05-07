@@ -29,16 +29,14 @@ locale.setlocale(locale.LC_ALL, '')
 # --------------------------------------------
 # 1. Connect to PostgreSQL DB
 # --------------------------------------------
-DB_NAME = 'veritas'
-DB_USER = 'postgres'
-DB_PASSWORD = quote_plus('Veritasnews123')
-DB_HOST = 'localhost'
-DB_PORT = '5432'
+from dotenv import load_dotenv
+from sqlalchemy.engine.url import make_url
 
-engine = create_engine(
-    f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}',
-    connect_args={"options": "-c client_encoding=utf8"}
-)
+load_dotenv()  # make sure your .env file is loaded
+
+db_url = os.getenv("DATABASE_URL")
+engine = create_engine(db_url, connect_args={"options": "-c client_encoding=utf8"})
+
 
 # --------------------------------------------
 # 2. Load interaction data
