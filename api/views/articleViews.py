@@ -10,6 +10,7 @@ import logging
 from rest_framework import status
 from api.models import Article
 from api.serializers import ArticleSerializer
+from django.db.models import Count
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,11 @@ from api.utils.news_ranker import rank_articles
 
 class ArticleListView(APIView):
     def get(self, request, *args, **kwargs):
-        articles = list(Article.objects.all())  # Get all
+        articles = list(
+            Article.objects.annotate(
+                liked_count=Count("liked_by_users")
+            )
+        )  # Get all
         rankings = rank_articles(articles, genre="politics", country="TR")
         score_map = {r["id"]: r["score"] for r in rankings}
 
