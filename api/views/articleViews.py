@@ -508,11 +508,7 @@ def personalized_feed(request):
 
         hybrid_score = ((0.3 * ml_score + 0.2 * fastapi_score) + (0.5 * recency_weight))
 
-        is_recent = hours_since_pub < 2
-        is_high_score = hybrid_score > 0.85
-        is_politics = (article.category or "").lower() == "siyaset"
-
-        if is_recent and is_high_score and is_politics and hybrid_score > highest_score:
+        if hybrid_score > highest_score:
             most_article_id = article_id
             highest_score = hybrid_score
 

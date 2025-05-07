@@ -12,6 +12,13 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+import os
+
+from dotenv import load_dotenv, find_dotenv
+load_dotenv()
+
+load_dotenv(find_dotenv(), override=True)
+print("📄 Using .env file from:", find_dotenv())
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,6 +57,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'api',
+    "cloudinary", 
+    "cloudinary_storage"
 ]
 
 MIDDLEWARE = [
@@ -62,6 +71,23 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+
+STATIC_URL = '/static/'
+
+if not DEBUG:
+    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+import cloudinary
+cloudinary.config( 
+  cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"), 
+  api_key = os.getenv("CLOUDINARY_API_KEY"), 
+  api_secret = os.getenv("CLOUDINARY_API_SECRET") 
+)
 
 ROOT_URLCONF = "backend.urls"
 
@@ -87,17 +113,23 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'veritas',
-        'USER': 'postgres',
-        'PASSWORD': 'Veritasnews123',
-        'HOST': 'localhost',
-        'PORT': '5432',
-    }
-}
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'veritas',
+#         'USER': 'postgres',
+#         'PASSWORD': 'Veritasnews123',
+#         'HOST': 'localhost',
+#         'PORT': '5432',
+#     }
+# }
 
+import dj_database_url
+import os
+
+DATABASES = {
+    'default': dj_database_url.config(default=os.getenv("DATABASE_URL"))
+}
 
 
 # Password validation
@@ -144,6 +176,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:19006",  # React Native Expo
     "http://127.0.0.1:8000",   # Django Server
+    "https://backend-r8mw.onrender.com",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True  # Change this to specific origins later for security

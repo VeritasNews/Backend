@@ -19,6 +19,38 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+import requests
+
+NEWSAPI_KEY = "5eed6c8440a84ac69345abfbae4505c8"
+
+def fetch_trending_titles():
+    url = "https://newsapi.org/v2/top-headlines"
+    params = {
+        "apiKey": NEWSAPI_KEY,
+        "country": "tr",
+        "pageSize": 20,
+    }
+    try:
+        res = requests.get(url, params=params, timeout=5)
+        res.raise_for_status()
+        data = res.json()
+        return [a["title"].lower() for a in data.get("articles", []) if a.get("title")]
+    except Exception as e:
+        logger.warning(f"NewsAPI fetch failed: {e}")
+        return []
+
+from difflib import SequenceMatcher
+
+def compute_trending_score(article_title: str, trending_titles: list[str]) -> float:
+    article_title = article_title.lower()
+    similarities = [
+        SequenceMatcher(None, article_title, trend_title).ratio()
+        for trend_title in trending_titles
+    ]
+    max_similarity = max(similarities, default=0.0)
+    return round(min(max_similarity, 1.0), 3)  # Keep it bounded
+
+
 # ------------------------------
 # 1. Pydantic schema
 # ------------------------------
@@ -113,36 +145,37 @@ def rank(
     genre: str | None = None,
     country: str = "TR"
 ):
+    trending_titles = fetch_trending_titles()
     ranked = []
     logger.info(f"Received {len(articles)} articles for ranking.")
-    
+
     for art in articles:
         title = art.title or ""
         body = art.body or ""
         full_text = f"{title} {body}"
 
-        # Core signals
         rec = recency_weight(art.published_at, genre or "")
         eng = np.sqrt(art.clicks + 2 * art.shares)
         sev = severity_predict(full_text, genre)
         geo = place_boost(body, country)
         src = art.source_score
 
-        # Dynamic boosts
         topic_boost = topic_trend_boost(full_text)
         time_boost = time_weight()
+        trend_score = compute_trending_score(title, trending_titles)
 
         base_score = (
-            0.20 * src +
-            0.25 * rec +
+            0.18 * src +
+            0.20 * rec +
             0.20 * eng +
-            0.20 * geo +
-            0.15 * sev
+            0.17 * geo +
+            0.15 * sev +
+            0.10 * trend_score
         )
         final_score = base_score * topic_boost * time_boost
 
         logger.info(
-            f"[{art.id}] Base={base_score:.4f}, Topic={topic_boost}, Time={time_boost}, Final={final_score:.4f}"
+            f"[{art.id}] Trend={trend_score:.3f}, Final={final_score:.4f}"
         )
 
         ranked.append({
