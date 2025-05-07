@@ -1,7 +1,7 @@
 # api/utils/news_ranker.py
 import requests
 
-FASTAPI_RANKING_URL = "https://ranker-service.onrender.com/v1/rank"
+FASTAPI_RANKING_URL = "http://localhost:8001/v1/rank"  # Update if hosted elsewhere
 
 def rank_articles(articles, genre="politics", country="TR"):
     payload = [
@@ -12,7 +12,7 @@ def rank_articles(articles, genre="politics", country="TR"):
             "source_score": 0.8,
             "published_at": a.createdAt.isoformat() if a.createdAt else "2025-01-01T00:00:00Z",
             "clicks": a.popularityScore or 0,
-            "shares": getattr(a, "liked_count", 0),
+            "shares": a.liked_by_users.count() or 0,
         }
         for a in articles
     ]

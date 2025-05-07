@@ -154,7 +154,7 @@ from api.serializers import ArticleSerializer
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-RANKING_API_URL = "https://ranker-service.onrender.com/v1/rank"
+RANKING_API_URL = "http://localhost:8001/v1/rank"
 
 @api_view(['GET'])
 def get_articles(request):
@@ -444,7 +444,7 @@ from api.serializers import ArticleSerializer
 import requests
 from datetime import datetime, timedelta
 
-RANKING_API_URL = "https://ranker-service.onrender.com/v1/rank"
+RANKING_API_URL = "http://localhost:8001/v1/rank"
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
