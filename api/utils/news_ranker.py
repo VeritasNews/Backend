@@ -4,18 +4,21 @@ import requests
 FASTAPI_RANKING_URL = "https://backend-1-93ib.onrender.com/v1/rank"  # Update if hosted elsewhere
 
 def rank_articles(articles, genre="politics", country="TR"):
-    payload = [
-        {
-            "id": str(a.articleId),
-            "title": a.title or "",
-            "body": a.longerSummary or a.summary or "",
-            "source_score": 0.8,
-            "published_at": a.createdAt.isoformat() if a.createdAt else "2025-01-01T00:00:00Z",
-            "clicks": a.popularityScore or 0,
-            "shares": a.liked_by_users.count() or 0,
-        }
-        for a in articles
-    ]
+    payload = []
+    for a in articles:
+        try:
+            published_at = a.createdAt.isoformat() if hasattr(a.createdAt, "isoformat") else str(a.createdAt)
+            payload.append({
+                "id": str(a.articleId),
+                "title": a.title or "",
+                "body": a.longerSummary or a.summary or "",
+                "source_score": 0.8,
+                "published_at": published_at,
+                "clicks": a.popularityScore or 0,
+                "shares": getattr(a, "liked_by_users", []).count() if hasattr(a, "liked_by_users") else 0,
+            })
+        except Exception as e:
+            print("❌ Error preparing article:", a, str(e))
 
     try:
         response = requests.post(FASTAPI_RANKING_URL, json=payload, params={"genre": genre, "country": country})
