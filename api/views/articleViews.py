@@ -461,21 +461,21 @@ def personalized_feed(request):
     if cached:
         return Response(cached)
 
-    # ⚡ Use `.only()` for lean querying
-    all_articles = Article.objects.only("id", "articleId", "title", "summary", "longerSummary", "popularityScore", "createdAt", "priority", "category", "image")
+    all_articles =Article.objects.only(
+        "id", "articleId", "title", "summary", "popularityScore", 
+        "createdAt", "category", "image"
+    )
 
-    # ML scores from DB
     scored_qs = UserArticleScore.objects.filter(user=user).select_related('article')
     ml_scores = {s.article.articleId: s.score for s in scored_qs}
     ml_priorities = {s.article.articleId: s.priority for s in scored_qs}
 
-    # Build payload (limit to recent 200)
     recent_articles = sorted(all_articles, key=lambda a: a.createdAt or datetime(2025, 1, 1), reverse=True)[:200]
     payload = [
         {
             "id": str(a.articleId),
             "title": a.title or "",
-            "body": a.longerSummary or a.summary or "",
+            "body": a.summary or "",
             "source_score": 0.8,
             "published_at": a.createdAt.isoformat() if a.createdAt else "2025-01-01T00:00:00Z",
             "clicks": a.popularityScore or 0,
@@ -484,12 +484,11 @@ def personalized_feed(request):
         for a in recent_articles
     ]
 
-    # 🔁 Batch requests
     fastapi_scores = {}
     try:
         for batch in chunked(payload, 50):
             res = requests.post(
-                "https://ranker-service.onrender.com/v1/rank",
+                "https://backend-1-93ib.onrender.com/v1/rank",
                 json=batch,
                 params={"genre": "politics", "country": "TR"},
                 timeout=5
@@ -511,7 +510,7 @@ def personalized_feed(request):
 
         title_lower = (article.title or "").strip().lower()
         if title_lower in {"error", "failed to generate"}:
-            continue  # 🚫 skip bad articles
+            continue
 
         ml_score = ml_scores.get(article_id, 0.5)
         fastapi_score = fastapi_scores.get(article_id, 0.5)
@@ -541,7 +540,6 @@ def personalized_feed(request):
             if str(a["articleId"]) == most_article_id:
                 a["personalized_priority"] = "most"
 
-    # Filters
     category = request.GET.get("category")
     priority = request.GET.get("priority")
 
@@ -558,7 +556,5 @@ def personalized_feed(request):
         reverse=True
     )
 
-    # 💾 Cache response for 5 minutes
     cache.set(cache_key, combined, timeout=300)
-
     return Response(combined)

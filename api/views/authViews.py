@@ -36,23 +36,34 @@ class RegisterView(APIView):
 
 from django.db.models import Q
 
+import time
+
 class LoginView(APIView):
     def post(self, request):
+        start = time.time()
         identifier = request.data.get('identifier')
         password = request.data.get('password')
 
         user = User.objects.filter(
-            Q(email=identifier) | Q(userName=identifier)  # 👈 check either
-        ).first()
+            Q(email=identifier) | Q(userName=identifier)
+        ).only("id", "password", "email").first()
+
+        lookup_time = time.time()
+        print("🔍 Lookup time:", lookup_time - start)
 
         if user and user.check_password(password):
+            check_time = time.time()
+            print("✅ Password check:", check_time - lookup_time)
+
             refresh = RefreshToken.for_user(user)
+            end = time.time()
+            print("🧠 Token generation:", end - check_time)
+            print("⏱️ Total login time:", end - start)
+
             return Response({
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
             }, status=status.HTTP_200_OK)
-
-        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 class PasswordResetRequestView(APIView):
     """
