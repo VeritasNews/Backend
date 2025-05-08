@@ -154,7 +154,7 @@ from api.serializers import ArticleSerializer
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-RANKING_API_URL = "http://localhost:8001/v1/rank"
+RANKING_API_URL = "https://backend-1-93ib.onrender.com/v1/rank"
 
 @api_view(['GET'])
 def get_articles(request):
@@ -444,7 +444,10 @@ from api.serializers import ArticleSerializer
 import requests
 from datetime import datetime, timedelta
 
-RANKING_API_URL = "http://localhost:8001/v1/rank"
+RANKING_API_URL = "https://backend-1-93ib.onrender.com/v1/rank"
+
+from django.core.cache import cache
+from more_itertools import chunked
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -453,14 +456,21 @@ def personalized_feed(request):
     import numpy as np
 
     user = request.user
-    all_articles = Article.objects.all()
+    cache_key = f"user_feed_{user.id}"
+    cached = cache.get(cache_key)
+    if cached:
+        return Response(cached)
+
+    # ⚡ Use `.only()` for lean querying
+    all_articles = Article.objects.only("id", "articleId", "title", "summary", "longerSummary", "popularityScore", "createdAt", "priority", "category", "image")
 
     # ML scores from DB
-    scored_qs = UserArticleScore.objects.filter(user=user)
+    scored_qs = UserArticleScore.objects.filter(user=user).select_related('article')
     ml_scores = {s.article.articleId: s.score for s in scored_qs}
     ml_priorities = {s.article.articleId: s.priority for s in scored_qs}
 
-    # Send ALL to FastAPI
+    # Build payload (limit to recent 200)
+    recent_articles = sorted(all_articles, key=lambda a: a.createdAt or datetime(2025, 1, 1), reverse=True)[:200]
     payload = [
         {
             "id": str(a.articleId),
@@ -471,37 +481,44 @@ def personalized_feed(request):
             "clicks": a.popularityScore or 0,
             "shares": 0
         }
-        for a in all_articles
+        for a in recent_articles
     ]
 
+    # 🔁 Batch requests
+    fastapi_scores = {}
     try:
-        res = requests.post(
-            "https://ranker-service.onrender.com/v1/rank",
-            json=payload,
-            params={"genre": "politics", "country": "TR"},
-            timeout=5
-        )
-        fastapi_scores = {r["id"]: r["score"] for r in res.json()}
+        for batch in chunked(payload, 50):
+            res = requests.post(
+                "https://ranker-service.onrender.com/v1/rank",
+                json=batch,
+                params={"genre": "politics", "country": "TR"},
+                timeout=5
+            )
+            if res.ok:
+                for r in res.json():
+                    fastapi_scores[r["id"]] = r["score"]
     except Exception as e:
         print("⚠️ FastAPI ranker failed:", str(e))
-        fastapi_scores = {}
 
-    # Combine ML and FastAPI
     combined = []
     most_article_id = None
     highest_score = -1
 
-    for article in all_articles:
+    for article in recent_articles:
         article_id = str(article.articleId)
+        if not article_id:
+            continue
+
+        title_lower = (article.title or "").strip().lower()
+        if title_lower in {"error", "failed to generate"}:
+            continue  # 🚫 skip bad articles
+
         ml_score = ml_scores.get(article_id, 0.5)
         fastapi_score = fastapi_scores.get(article_id, 0.5)
 
-        created_at = article.createdAt
+        created_at = article.createdAt or datetime(2025, 1, 1, tzinfo=timezone.utc)
         if not isinstance(created_at, datetime):
-            try:
-                created_at = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
-            except Exception:
-                created_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
+            created_at = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
 
         hours_since_pub = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
         recency_weight = np.exp(-hours_since_pub / 6)
@@ -514,23 +531,17 @@ def personalized_feed(request):
 
         priority = ml_priorities.get(article_id, "low")
 
-        title_lower = (article.title or "").strip().lower()
-        if title_lower in {"error", "failed to generate"}:
-            continue  # 🚫 skip bad articles
-
         art_data = ArticleSerializer(article, context={'request': request}).data
         art_data['relevance_score'] = round(hybrid_score, 4)
         art_data['personalized_priority'] = priority
         combined.append(art_data)
 
-
-    # Apply "most" to just one article if conditions matched
     if most_article_id:
         for a in combined:
             if str(a["articleId"]) == most_article_id:
                 a["personalized_priority"] = "most"
 
-    # Apply filters
+    # Filters
     category = request.GET.get("category")
     priority = request.GET.get("priority")
 
@@ -539,7 +550,6 @@ def personalized_feed(request):
     if priority:
         combined = [a for a in combined if a.get("personalized_priority") == priority]
 
-    # Sort by hybrid relevance
     combined.sort(
         key=lambda x: (
             round(float(x["relevance_score"]), 4),
@@ -547,5 +557,8 @@ def personalized_feed(request):
         ),
         reverse=True
     )
+
+    # 💾 Cache response for 5 minutes
+    cache.set(cache_key, combined, timeout=300)
 
     return Response(combined)
