@@ -18,10 +18,38 @@ app = FastAPI(
 logging.basicConfig(level=logging.INFO)
 
 # --- Constants ---
-TR_LOCATIONS = { ... }  # same as before
-HOT_TOPICS = { ... }
-SOURCE_WEIGHTS = { ... }
-SCORE_WEIGHTS = { ... }
+# --- Constants ---
+TR_LOCATIONS = {
+    "istanbul", "ankara", "izmir", "bursa", "antalya", "adana", "konya",
+    "trabzon", "gaziantep", "diyarbakır", "kayseri", "mersin", "van",
+    "karabük", "kocaeli", "sakarya", "manisa", "edirne", "rize", "ordu",
+}
+
+HOT_TOPICS = {
+    "deprem", "ekonomi", "siyaset", "enflasyon", "zam", "futbol",
+    "seçim", "togg", "aselsan", "savunma", "yapay zeka", "göçmen", "terör",
+    "iran", "israil", "ukrayna", "abd", "cumhurbaşkanı"
+}
+
+SOURCE_WEIGHTS = {
+    "hurriyet": 1.2,
+    "cnn": 1.2,
+    "ntv": 1.2,
+    "sozcu": 1.1,
+    "haberler": 1.1,
+    "milliyet": 1.0,
+    "ensonhaber": 0.9,
+}
+
+SCORE_WEIGHTS = {
+    "source": 0.18,
+    "recency": 0.20,
+    "engagement": 0.20,
+    "geo": 0.17,
+    "severity": 0.15,
+    "trend": 0.10,
+}
+
 
 # --- Models ---
 class NewsArticle(BaseModel):
@@ -100,7 +128,7 @@ def fetch_trending_titles() -> set:
     except Exception as e:
         logging.warning(f"Failed to fetch trending titles: {e}")
         return set()
-
+    
 # --- Routes ---
 @app.get("/")
 def read_root():
