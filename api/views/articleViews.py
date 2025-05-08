@@ -10,22 +10,71 @@ import logging
 from rest_framework import status
 from api.models import Article
 from api.serializers import ArticleSerializer
+from rest_framework.pagination import PageNumberPagination
 
 logger = logging.getLogger(__name__)
 
 from api.utils.news_ranker import rank_articles
 
+# Constants
+RANKING_API_URL = "https://backend-1-93ib.onrender.com/v1/rank"
+CACHE_TIMEOUT_MINUTES = 15
+
+# Custom pagination class with configurable page size
+class ArticlePagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+# Optimized ArticleListView with pagination and caching
 class ArticleListView(APIView):
+    pagination_class = ArticlePagination
+    
     def get(self, request, *args, **kwargs):
-        articles = list(Article.objects.all())  # Get all
-        rankings = rank_articles(articles, genre="politics", country="TR")
-        score_map = {r["id"]: r["score"] for r in rankings}
+        # Get query parameters
+        category = request.query_params.get('category')
+        cache_key = f"articles_list_{category or 'all'}"
+        
+        # Try to get from cache first
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+        
+        # Apply filter if category is provided
+        queryset = Article.objects.all().order_by('-createdAt')
+        if category:
+            queryset = queryset.filter(category__iexact=category)
+        
+        # Setup pagination
+        paginator = self.pagination_class()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+        
+        # Serialize the data
+        serializer = ArticleSerializer(paginated_queryset, many=True, context={'request': request})
+        serialized_data = paginator.get_paginated_response(serializer.data).data
+        
+        # Cache the response
+        cache.set(cache_key, serialized_data, timeout=CACHE_TIMEOUT_MINUTES * 60)
+        
+        return Response(serialized_data)
 
-        # Sort by score
-        articles.sort(key=lambda a: score_map.get(str(a.articleId), 0), reverse=True)
-
-        serializer = ArticleSerializer(articles, many=True, context={'request': request})
-        return Response(serializer.data)
+# Async function to call ranking API
+async def fetch_rankings(payload, params):
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(
+                RANKING_API_URL, 
+                json=payload, 
+                params=params,
+                timeout=5
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                return []
+        except Exception as e:
+            logger.error(f"Failed to fetch rankings: {str(e)}")
+            return []
 
 
 # Directory path for JSON files
@@ -153,20 +202,38 @@ from api.models import Article
 from api.serializers import ArticleSerializer
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+import asyncio
+import aiohttp
 
 RANKING_API_URL = "https://backend-1-93ib.onrender.com/v1/rank"
 
 @api_view(['GET'])
 def get_articles(request):
-    category = request.GET.get('category', None)
-
-    articles = Article.objects.all()
+    # Get query parameters
+    category = request.GET.get('category')
+    page = int(request.GET.get('page', 1))
+    page_size = min(int(request.GET.get('page_size', 20)), 50)  # Limit max page size
+    
+    # Generate cache key based on parameters
+    cache_key = f"articles_{category or 'all'}_p{page}_s{page_size}"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return Response(cached_data)
+    
+    # Build queryset with filtering
+    queryset = Article.objects.all()
     if category:
-        articles = articles.filter(category__iexact=category)
-
-    serializer = ArticleSerializer(articles, many=True)
+        queryset = queryset.filter(category__iexact=category)
+    
+    # Calculate pagination limits
+    start = (page - 1) * page_size
+    end = start + page_size
+    
+    # Get paginated articles
+    articles = queryset.order_by('-createdAt')[start:end]
+    serializer = ArticleSerializer(articles, many=True, context={'request': request})
     serialized_data = serializer.data
-
+    
     # Prepare payload for FastAPI ranking
     ranking_payload = [
         {
@@ -180,33 +247,72 @@ def get_articles(request):
         }
         for a in serialized_data
     ]
-
+    
     try:
-        rank_response = requests.post(RANKING_API_URL, json=ranking_payload, params={
-            "genre": category,
-            "country": "TR"
-        })
-        rank_data = rank_response.json()
-        score_map = {r["id"]: r["score"] for r in rank_data}
-        # Sort original data by score
-        sorted_articles = sorted(serialized_data, key=lambda a: score_map.get(str(a["articleId"]), 0), reverse=True)
-        return Response(sorted_articles)
-
+        # Execute async ranking call
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        rank_data = loop.run_until_complete(
+            fetch_rankings(ranking_payload, {"genre": category, "country": "TR"})
+        )
+        loop.close()
+        
+        # Process rankings
+        score_map = {r["id"]: r["score"] for r in rank_data} if rank_data else {}
+        
+        # Sort by score
+        sorted_articles = sorted(
+            serialized_data, 
+            key=lambda a: score_map.get(str(a["articleId"]), 0), 
+            reverse=True
+        )
+        
+        # Cache the response
+        response_data = {
+            "count": queryset.count(),
+            "next": f"/api/articles/?page={page+1}&page_size={page_size}" if len(serialized_data) == page_size else None,
+            "previous": f"/api/articles/?page={page-1}&page_size={page_size}" if page > 1 else None,
+            "results": sorted_articles
+        }
+        cache.set(cache_key, response_data, timeout=CACHE_TIMEOUT_MINUTES * 60)
+        
+        return Response(response_data)
+        
     except Exception as e:
-        print("⚠️ Ranking API failed:", str(e))
-        return Response(serialized_data)
+        logger.error(f"Error during article ranking: {str(e)}")
+        # Fall back to unranked results
+        response_data = {
+            "count": queryset.count(),
+            "next": f"/api/articles/?page={page+1}&page_size={page_size}" if len(serialized_data) == page_size else None,
+            "previous": f"/api/articles/?page={page-1}&page_size={page_size}" if page > 1 else None,
+            "results": serialized_data
+        }
+        return Response(response_data)
 
 
+# Optimized get_article_by_id with better error handling and caching
 @api_view(['GET'])
 def get_article_by_id(request, pk):
+    cache_key = f"article_{pk}"
+    cached_article = cache.get(cache_key)
+    
+    if cached_article:
+        return Response(cached_article)
+    
     try:
         article = Article.objects.get(pk=pk)
-        serializer = ArticleSerializer(article, context={'request': request})  # 👈 FIX HERE
+        serializer = ArticleSerializer(article, context={'request': request})
+        data = serializer.data
+        
+        # Cache the article data
+        cache.set(cache_key, data, timeout=CACHE_TIMEOUT_MINUTES * 60)
+        
         logger.info(f"Fetched article with ID: {pk}")
-        return Response(serializer.data)
+        return Response(data)
     except Article.DoesNotExist:
         logger.warning(f"Article with ID {pk} not found.")
         return Response({"error": "Article not found."}, status=status.HTTP_404_NOT_FOUND)
+
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -454,23 +560,41 @@ from more_itertools import chunked
 def personalized_feed(request):
     from datetime import datetime, timezone
     import numpy as np
-
+    from more_itertools import chunked
+    
     user = request.user
     cache_key = f"user_feed_{user.id}"
+    category = request.GET.get("category")
+    priority = request.GET.get("priority")
+    
+    # Update cache key with filters
+    if category:
+        cache_key += f"_cat_{category}"
+    if priority:
+        cache_key += f"_pri_{priority}"
+        
     cached = cache.get(cache_key)
     if cached:
         return Response(cached)
 
-    all_articles =Article.objects.only(
+    # Get only the fields we need to improve query performance
+    all_articles = Article.objects.only(
         "id", "articleId", "title", "summary", "popularityScore", 
         "createdAt", "category", "image"
     )
-
+    
+    # Get user's article scores in one query
     scored_qs = UserArticleScore.objects.filter(user=user).select_related('article')
     ml_scores = {s.article.articleId: s.score for s in scored_qs}
     ml_priorities = {s.article.articleId: s.priority for s in scored_qs}
 
-    recent_articles = sorted(all_articles, key=lambda a: a.createdAt or datetime(2025, 1, 1), reverse=True)[:200]
+    # Get recent articles only
+    recent_articles = sorted(
+        all_articles, 
+        key=lambda a: a.createdAt or datetime(2025, 1, 1), 
+        reverse=True
+    )[:200]  # Limit to 200 recent articles
+    
     payload = [
         {
             "id": str(a.articleId),
@@ -484,21 +608,49 @@ def personalized_feed(request):
         for a in recent_articles
     ]
 
+    # Get FastAPI scores
     fastapi_scores = {}
     try:
-        for batch in chunked(payload, 50):
-            res = requests.post(
-                "https://backend-1-93ib.onrender.com/v1/rank",
-                json=batch,
-                params={"genre": "politics", "country": "TR"},
-                timeout=5
-            )
-            if res.ok:
-                for r in res.json():
-                    fastapi_scores[r["id"]] = r["score"]
+        # Use async requests for better performance
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        async def fetch_all_batches():
+            results = {}
+            async with aiohttp.ClientSession() as session:
+                tasks = []
+                for batch in chunked(payload, 50):
+                    tasks.append(
+                        fetch_batch_scores(session, batch)
+                    )
+                batch_results = await asyncio.gather(*tasks)
+                for batch_result in batch_results:
+                    results.update(batch_result)
+            return results
+            
+        async def fetch_batch_scores(session, batch):
+            batch_scores = {}
+            try:
+                async with session.post(
+                    RANKING_API_URL,
+                    json=batch,
+                    params={"genre": "politics", "country": "TR"},
+                    timeout=5
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        for item in data:
+                            batch_scores[item["id"]] = item["score"]
+            except Exception as e:
+                logger.error(f"Batch ranking failed: {str(e)}")
+            return batch_scores
+            
+        fastapi_scores = loop.run_until_complete(fetch_all_batches())
+        loop.close()
     except Exception as e:
-        print("⚠️ FastAPI ranker failed:", str(e))
+        logger.error(f"⚠️ FastAPI ranker failed: {str(e)}")
 
+    # Process articles with scores
     combined = []
     most_article_id = None
     highest_score = -1
@@ -512,9 +664,11 @@ def personalized_feed(request):
         if title_lower in {"error", "failed to generate"}:
             continue
 
+        # Get scores from different sources
         ml_score = ml_scores.get(article_id, 0.5)
         fastapi_score = fastapi_scores.get(article_id, 0.5)
 
+        # Calculate recency weight
         created_at = article.createdAt or datetime(2025, 1, 1, tzinfo=timezone.utc)
         if not isinstance(created_at, datetime):
             created_at = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
@@ -522,6 +676,7 @@ def personalized_feed(request):
         hours_since_pub = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
         recency_weight = np.exp(-hours_since_pub / 6)
 
+        # Calculate hybrid score
         hybrid_score = ((0.3 * ml_score + 0.2 * fastapi_score) + (0.5 * recency_weight))
 
         if hybrid_score > highest_score:
@@ -530,24 +685,27 @@ def personalized_feed(request):
 
         priority = ml_priorities.get(article_id, "low")
 
-        art_data = ArticleSerializer(article, context={'request': request}).data
-        art_data['relevance_score'] = round(hybrid_score, 4)
-        art_data['personalized_priority'] = priority
-        combined.append(art_data)
+        # Only serialize articles that pass the filters
+        if (not category or article.category == category) and \
+           (not priority or priority == priority):
+            art_data = ArticleSerializer(article, context={'request': request}).data
+            art_data['relevance_score'] = round(hybrid_score, 4)
+            art_data['personalized_priority'] = priority
+            combined.append(art_data)
 
+    # Mark the highest scoring article as "most"
     if most_article_id:
         for a in combined:
             if str(a["articleId"]) == most_article_id:
                 a["personalized_priority"] = "most"
 
-    category = request.GET.get("category")
-    priority = request.GET.get("priority")
-
+    # Apply any filtering that wasn't already done
     if category:
         combined = [a for a in combined if a.get("category") == category]
     if priority:
         combined = [a for a in combined if a.get("personalized_priority") == priority]
 
+    # Sort by score
     combined.sort(
         key=lambda x: (
             round(float(x["relevance_score"]), 4),
@@ -556,5 +714,19 @@ def personalized_feed(request):
         reverse=True
     )
 
-    cache.set(cache_key, combined, timeout=300)
-    return Response(combined)
+    # Paginate the results
+    page = int(request.GET.get('page', 1))
+    page_size = min(int(request.GET.get('page_size', 20)), 50)
+    start = (page - 1) * page_size
+    end = start + page_size
+    
+    response_data = {
+        "count": len(combined),
+        "next": f"/api/personalized_feed/?page={page+1}&page_size={page_size}" if len(combined) > end else None,
+        "previous": f"/api/personalized_feed/?page={page-1}&page_size={page_size}" if page > 1 else None,
+        "results": combined[start:end]
+    }
+
+    # Cache the response
+    cache.set(cache_key, response_data, timeout=300)
+    return Response(response_data)
