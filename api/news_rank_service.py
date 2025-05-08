@@ -28,7 +28,8 @@ TR_LOCATIONS = {
 HOT_TOPICS = {
     "deprem", "ekonomi", "siyaset", "enflasyon", "zam", "futbol",
     "seçim", "togg", "aselsan", "savunma", "yapay zeka", "göçmen", "terör",
-    "iran", "israil", "ukrayna", "abd", "cumhurbaşkanı"
+    "iran", "israil", "ukrayna", "abd", "cumhurbaşkanı", "imamoğlu", "erdoğan", "ekrem imamoğlu", 
+    "özgür özel", "chp", "akp", "mhp", "dem", "saadet", "deva", "gezi", "kılıçdaroğlu", 
 }
 
 SOURCE_WEIGHTS = {
