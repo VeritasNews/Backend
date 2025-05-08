@@ -1,193 +1,136 @@
-from __future__ import annotations
-import re
-import datetime as dt
-import warnings
-import logging
-from functools import lru_cache
+from fastapi import FastAPI, Query
+from pydantic import BaseModel
+from datetime import datetime
 from typing import List
-
-import numpy as np
-from fastapi import FastAPI, APIRouter
-from pydantic import BaseModel, Field
-
-# ------------------------------
-# Logging setup
-# ------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
-logger = logging.getLogger(__name__)
-
 import requests
+import re
+from functools import lru_cache
 
-NEWSAPI_KEY = "5eed6c8440a84ac69345abfbae4505c8"
+app = FastAPI()
 
-def fetch_trending_titles():
-    url = "https://newsapi.org/v2/top-headlines"
-    params = {
-        "apiKey": NEWSAPI_KEY,
-        "country": "tr",
-        "pageSize": 20,
-    }
-    try:
-        res = requests.get(url, params=params, timeout=5)
-        res.raise_for_status()
-        data = res.json()
-        return [a["title"].lower() for a in data.get("articles", []) if a.get("title")]
-    except Exception as e:
-        logger.warning(f"NewsAPI fetch failed: {e}")
-        return []
-
-from difflib import SequenceMatcher
-
-def compute_trending_score(article_title: str, trending_titles: list[str]) -> float:
-    article_title = article_title.lower()
-    similarities = [
-        SequenceMatcher(None, article_title, trend_title).ratio()
-        for trend_title in trending_titles
-    ]
-    max_similarity = max(similarities, default=0.0)
-    return round(min(max_similarity, 1.0), 3)  # Keep it bounded
-
-
-# ------------------------------
-# 1. Pydantic schema
-# ------------------------------
-class Article(BaseModel):
-    id: str
-    title: str
-    body: str
-    source_score: float = Field(ge=0, le=1)
-    published_at: dt.datetime
-    clicks: int = Field(ge=0)
-    shares: int = Field(ge=0)
-
-
-# ------------------------------
-# 2. Lightweight “models”
-# ------------------------------
-
-_SEVERITY = {
-    "earthquake": 1.0, "deprem": 1.0,
-    "election": .9, "seçim": .9,
-    "coup": .95, "darbe": .95,
-    "protest": .8, "gösteri": .8,
+# --- Constants ---
+TR_LOCATIONS = {
+    "istanbul", "ankara", "izmir", "bursa", "antalya", "adana", "konya",
+    "trabzon", "gaziantep", "diyarbakır", "kayseri", "mersin", "van",
+    "karabük", "kocaeli", "sakarya", "manisa", "edirne", "rize", "ordu",
 }
-def severity_predict(text: str, genre: str | None) -> float:
-    txt = text.lower()
-    score = max((_SEVERITY[k] for k in _SEVERITY if k in txt), default=.2)
-    if genre and genre.lower() == "politics":
-        score += 0.05
-    result = min(score, 1.0)
-    logger.debug(f"[Severity] Score: {result:.3f} for genre='{genre}' and text='{text[:30]}...'")
-    return result
-
 
 HOT_TOPICS = {
-    "1 mayıs", "taksim", "kadıköy", "anayasa", "gençlik",
-    "deprem", "ekonomi", "enflasyon", "gazze", "öğrenci", "özgür özel", "erdoğan", "önder"
+    "deprem", "ekonomi", "siyaset", "enflasyon", "zam", "futbol",
+    "seçim", "togg", "aselsan", "savunma", "yapay zeka", "göçmen", "terör",
+    "iran", "israil", "ukrayna", "abd", "cumhurbaşkanı"
 }
-def topic_trend_boost(text: str) -> float:
-    lowered = text.lower()
-    boost = 1.2 if any(topic in lowered for topic in HOT_TOPICS) else 1.0
-    logger.debug(f"[Topic] Boost: {boost} for text='{text[:30]}...'")
-    return boost
 
+SOURCE_WEIGHTS = {
+    "hurriyet": 1.2,
+    "cnn": 1.2,
+    "ntv": 1.2,
+    "sozcu": 1.1,
+    "haberler": 1.1,
+    "milliyet": 1.0,
+    "ensonhaber": 0.9,
+}
 
-def recency_weight(published_at: dt.datetime, genre: str = "politics") -> float:
-    now = dt.datetime.now(dt.timezone.utc)
-    hours = (now - published_at).total_seconds() / 3600
-    half_life = 4 if genre == "politics" else 12
-    weight = np.exp(-hours / half_life)
-    logger.debug(f"[Recency] Hours ago: {hours:.2f}, Weight: {weight:.3f}")
-    return weight
+SCORE_WEIGHTS = {
+    "source": 0.18,
+    "recency": 0.20,
+    "engagement": 0.20,
+    "geo": 0.17,
+    "severity": 0.15,
+    "trend": 0.10,
+}
 
+# --- Models ---
+class NewsArticle(BaseModel):
+    title: str
+    content: str
+    timestamp: str
+    source: str
+    views: int = 0
+    likes: int = 0
+    comments: int = 0
 
-_TURK_LOCS = {"türkiye", "ankara", "istanbul", "izmir"}
-@lru_cache(maxsize=None)
-def _load_spacy_tr():
+class NewsRankRequest(BaseModel):
+    articles: List[NewsArticle]
+    debug: bool = False
+
+class NewsRankedResponse(BaseModel):
+    article: NewsArticle
+    score: float
+    details: dict | None = None
+
+# --- Utility Functions ---
+def normalize(text: str) -> str:
+    return text.lower()
+
+def extract_words(text: str) -> set:
+    return set(re.findall(r"\w+", normalize(text)))
+
+def geo_score(text: str) -> float:
+    return 1.2 if TR_LOCATIONS.intersection(extract_words(text)) else 1.0
+
+def severity_predict(text: str) -> float:
+    score = 1.0
+    lowered = normalize(text)
+    if "ölü" in lowered or "ölüm" in lowered: score += 0.4
+    if "yaralı" in lowered: score += 0.2
+    if "patlama" in lowered: score += 0.3
+    return min(score, 1.5)
+
+def recency_weight(date_str: str) -> float:
     try:
-        import spacy
-        return spacy.load("tr_core_news_sm")
-    except (OSError, ModuleNotFoundError):
-        warnings.warn("spaCy Turkish model not found – using regex fallback.")
-        return None
+        article_time = datetime.fromisoformat(date_str)
+        delta = (datetime.now() - article_time).total_seconds()
+        if delta < 3600: return 1.5
+        elif delta < 86400: return 1.2
+        elif delta < 3 * 86400: return 1.0
+        else: return 0.8
+    except Exception:
+        return 1.0
 
-def place_boost(body: str, iso: str = "TR") -> float:
-    nlp = _load_spacy_tr()
-    if nlp:
-        for ent in nlp(body).ents:
-            if ent.label_ == "LOC" and ent.text.lower() in _TURK_LOCS:
-                logger.debug("[Geo] spaCy location match found.")
-                return 1.0
-        return 0.0
-    matched = bool(re.search(r"(Türkiye|Ankara|İstanbul|İzmir)", body, re.I))
-    logger.debug(f"[Geo] Regex match: {matched}")
-    return 1.0 if matched else 0.0
+def engagement_score(views: int, likes: int, comments: int) -> float:
+    return min(1.5, 1.0 + 0.00005 * views + 0.01 * likes + 0.02 * comments)
 
+def source_weight(source: str) -> float:
+    return SOURCE_WEIGHTS.get(normalize(source), 1.0)
 
-def time_weight() -> float:
-    hour = dt.datetime.now().hour
-    weight = 1.2 if 7 <= hour <= 11 else 1.0
-    logger.debug(f"[Time] Hour={hour}, Weight={weight}")
-    return weight
+def hot_topic_score(text: str, hot_topics: set) -> float:
+    return 1.2 if hot_topics.intersection(extract_words(text)) else 1.0
 
+@lru_cache(maxsize=1)
+def fetch_trending_titles() -> set:
+    try:
+        response = requests.get("https://trends.google.com/trends/trendingsearches/daily/rss?geo=TR")
+        titles = set(re.findall(r"<title>(.*?)</title>", response.text, re.DOTALL))
+        return {normalize(t) for t in titles if len(t.split()) < 8}
+    except:
+        return set()
 
-# ------------------------------
-# 3. API endpoint
-# ------------------------------
-router = APIRouter(prefix="/v1")
-
-@router.post("/rank")
-def rank(
-    articles: List[Article],
-    genre: str | None = None,
-    country: str = "TR"
-):
+# --- Main Endpoint ---
+@app.post("/rank", response_model=List[NewsRankedResponse])
+def rank_articles(request: NewsRankRequest):
     trending_titles = fetch_trending_titles()
-    ranked = []
-    logger.info(f"Received {len(articles)} articles for ranking.")
 
-    for art in articles:
-        title = art.title or ""
-        body = art.body or ""
-        full_text = f"{title} {body}"
+    results = []
+    for article in request.articles:
+        title = article.title
+        content = article.content
 
-        rec = recency_weight(art.published_at, genre or "")
-        eng = np.sqrt(art.clicks + 2 * art.shares)
-        sev = severity_predict(full_text, genre)
-        geo = place_boost(body, country)
-        src = art.source_score
+        scores = {
+            "source": source_weight(article.source),
+            "recency": recency_weight(article.timestamp),
+            "engagement": engagement_score(article.views, article.likes, article.comments),
+            "geo": geo_score(f"{title} {content}"),
+            "severity": severity_predict(f"{title} {content}"),
+            "trend": hot_topic_score(f"{title} {content}", HOT_TOPICS.union(trending_titles)),
+        }
 
-        topic_boost = topic_trend_boost(full_text)
-        time_boost = time_weight()
-        trend_score = compute_trending_score(title, trending_titles)
+        total_score = sum(SCORE_WEIGHTS[key] * scores[key] for key in scores)
 
-        base_score = (
-            0.18 * src +
-            0.20 * rec +
-            0.20 * eng +
-            0.17 * geo +
-            0.15 * sev +
-            0.10 * trend_score
-        )
-        final_score = base_score * topic_boost * time_boost
+        results.append(NewsRankedResponse(
+            article=article,
+            score=round(total_score, 3),
+            details=scores if request.debug else None
+        ))
 
-        logger.info(
-            f"[{art.id}] Trend={trend_score:.3f}, Final={final_score:.4f}"
-        )
-
-        ranked.append({
-            "id": art.id,
-            "score": round(float(final_score), 6)
-        })
-
-    return sorted(ranked, key=lambda x: x["score"], reverse=True)
-
-
-# ------------------------------
-# 4. App
-# ------------------------------
-app = FastAPI(title="News‑ranking‑API", version="0.2.0")
-app.include_router(router)
+    return sorted(results, key=lambda x: x.score, reverse=True)
