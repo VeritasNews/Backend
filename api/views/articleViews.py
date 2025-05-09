@@ -154,7 +154,7 @@ from api.serializers import ArticleSerializer
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-RANKING_API_URL = "http://144.91.84.230:8001/v1/rank"
+RANKING_API_URL = "http://144.91.84.230:8002/v1/rank"
 
 @api_view(['GET'])
 def get_articles(request):
@@ -444,7 +444,7 @@ from api.serializers import ArticleSerializer
 import requests
 from datetime import datetime, timedelta
 
-RANKING_API_URL = "http://144.91.84.230:8001/v1/rank"
+RANKING_API_URL = "http://144.91.84.230:8002/v1/rank"
 
 from django.core.cache import cache
 from more_itertools import chunked
@@ -492,7 +492,7 @@ def personalized_feed(request):
     try:
         for batch in chunked(payload, 50):
             res = requests.post(
-                "http://144.91.84.230:8001/v1/rank",
+                "http://144.91.84.230:8002/v1/rank",
                 json=batch,
                 params={"genre": "politics", "country": "TR"},
                 timeout=5
