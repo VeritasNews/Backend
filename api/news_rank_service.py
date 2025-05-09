@@ -32,13 +32,17 @@ HOT_TOPICS = {
 }
 
 SOURCE_WEIGHTS = {
-    "hurriyet": 1.2,
-    "cnn": 1.2,
-    "ntv": 1.2,
+    "hurriyet": 1.0,
+    "cnn": 1.0,
+    "ntv": 1.0,
     "sozcu": 1.3,
     "haberler": 1.1,
     "milliyet": 1.0,
     "ensonhaber": 0.9,
+    "tele1": 1.3,
+    "t24": 1.0,
+    "bianet": 1.2,
+    "cumhuriyet": 1.3,
 }
 
 SCORE_WEIGHTS = {
@@ -49,7 +53,6 @@ SCORE_WEIGHTS = {
     "severity": 0.15,
     "trend": 0.10,
 }
-
 
 # --- Models ---
 class NewsArticle(BaseModel):
