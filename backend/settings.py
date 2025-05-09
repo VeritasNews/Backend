@@ -183,7 +183,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8081",  # React Native Expo
     "http://127.0.0.1:8000",   # Django Server
     "https://backend-r8mw.onrender.com",
-    "https://144.91.84.230:8000",
+    "https://144.91.84.230:8001",
 ]
 
 # CORS_ALLOW_ALL_ORIGINS = True  # Change this to specific origins later for security
