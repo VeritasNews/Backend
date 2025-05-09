@@ -134,8 +134,20 @@ import dj_database_url
 import os
 
 DATABASES = {
-    'default': dj_database_url.config(default=os.getenv("DATABASE_URL"))
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'veritas',
+        'USER': 'postgres.pxjomdphjbkrjnihjekl',
+        'PASSWORD': 'Veritasnews123',
+        'HOST': 'aws-0-eu-central-1.pooler.supabase.com',
+        'PORT': '6543',
+        'OPTIONS': {
+            'sslmode': 'require',
+            'client_encoding': 'UTF8',
+        },
+    }
 }
+
 
 
 # Password validation
