@@ -18,7 +18,6 @@ app = FastAPI(
 logging.basicConfig(level=logging.INFO)
 
 # --- Constants ---
-# --- Constants ---
 TR_LOCATIONS = {
     "istanbul", "ankara", "izmir", "bursa", "antalya", "adana", "konya",
     "trabzon", "gaziantep", "diyarbakır", "kayseri", "mersin", "van",
@@ -26,17 +25,17 @@ TR_LOCATIONS = {
 }
 
 HOT_TOPICS = {
-    "deprem", "ekonomi", "siyaset", "enflasyon", "zam", "futbol",
-    "seçim", "togg", "aselsan", "savunma", "yapay zeka", "göçmen", "terör",
+    "deprem", "ekonomi", "siyaset", "enflasyon", "zam",
+    "seçim", "aselsan", "savunma", "yapay zeka", "göçmen", "terör",
     "iran", "israil", "ukrayna", "abd", "cumhurbaşkanı", "imamoğlu", "erdoğan", "ekrem imamoğlu", 
-    "özgür özel", "chp", "akp", "mhp", "dem", "saadet", "deva", "gezi", "kılıçdaroğlu", 
+    "özgür özel", "chp", "akp", "mhp", "dem", "gezi", "kılıçdaroğlu", 
 }
 
 SOURCE_WEIGHTS = {
     "hurriyet": 1.2,
     "cnn": 1.2,
     "ntv": 1.2,
-    "sozcu": 1.1,
+    "sozcu": 1.3,
     "haberler": 1.1,
     "milliyet": 1.0,
     "ensonhaber": 0.9,
