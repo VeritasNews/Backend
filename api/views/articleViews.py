@@ -498,11 +498,15 @@ def personalized_feed(request):
                 timeout=5
             )
             if res.ok:
-                res_json = res.json()
-                print(res_json)  # Optionally, check the response structure
-                for r in res_json:
-                    article_id = r["article"]["articleId"]
-                    fastapi_scores[article_id] = r["score"]
+                response_data = res.json()
+                if isinstance(response_data, list):
+                    # Response is a list, so we proceed with the loop
+                    for r in response_data:
+                        article_id = r.get("article", {}).get("articleId")
+                        if article_id:
+                            fastapi_scores[article_id] = r.get("score", 0.5)
+                else:
+                    print("Expected list, but got:", response_data)
     except Exception as e:
         print("⚠️ FastAPI ranker failed:", str(e))
 
