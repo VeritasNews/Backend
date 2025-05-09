@@ -477,13 +477,13 @@ def personalized_feed(request):
     ).order_by('-createdAt')[:200]  # Use DB sorting instead of Python sorting
     payload = [
         {
-            "id": str(a.articleId),
             "title": a.title or "",
-            "body": a.summary or "",
-            "source_score": 0.8,
-            "published_at": a.createdAt.isoformat() if a.createdAt else "2025-01-01T00:00:00Z",
-            "clicks": a.popularityScore or 0,
-            "shares": 0
+            "content": a.summary or "",  # Assuming `summary` is used here
+            "timestamp": a.createdAt.isoformat() if a.createdAt else "2025-01-01T00:00:00Z",  # Ensure ISO format
+            "source": "default_source",  # Add a default source if needed
+            "views": a.popularityScore or 0,
+            "likes": 0,  # Assuming no data for likes
+            "comments": 0  # Assuming no data for comments
         }
         for a in recent_articles
     ]
