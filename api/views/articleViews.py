@@ -461,52 +461,52 @@ def personalized_feed(request):
     if cached:
         return Response(cached)
 
-    all_articles =Article.objects.only(
-        "id", "articleId", "title", "summary", "popularityScore", 
-        "createdAt", "category", "image"
-    )
-
-    scored_qs = UserArticleScore.objects.filter(user=user).select_related('article')
-    ml_scores = {s.article.articleId: s.score for s in scored_qs}
-    ml_priorities = {s.article.articleId: s.priority for s in scored_qs}
-
     # Limit initial query to recent articles in the database
     recent_articles = Article.objects.only(
         "id", "articleId", "title", "summary", "popularityScore", 
         "createdAt", "category", "image"
     ).order_by('-createdAt')[:200]  # Use DB sorting instead of Python sorting
-    payload = [
-        {
-            "title": a.title or "",
-            "content": a.summary or "",  # Assuming `summary` is used here
-            "timestamp": a.createdAt.isoformat() if a.createdAt else "2025-01-01T00:00:00Z",  # Ensure ISO format
-            "source": "default_source",  # Add a default source if needed
-            "views": a.popularityScore or 0,
-            "likes": 0,  # Assuming no data for likes
-            "comments": 0  # Assuming no data for comments
-        }
-        for a in recent_articles
-    ]
+    
+    scored_qs = UserArticleScore.objects.filter(user=user).select_related('article')
+    ml_scores = {s.article.articleId: s.score for s in scored_qs}
+    ml_priorities = {s.article.articleId: s.priority for s in scored_qs}
+
+    # Format data for FastAPI ranking
+    fastapi_request = {
+        "articles": [
+            {
+                "title": a.title or "",
+                "content": a.summary or "",
+                "timestamp": a.createdAt.isoformat() if a.createdAt else "2025-01-01T00:00:00Z",
+                "source": getattr(a, "source", "default_source"),
+                "views": a.popularityScore or 0,
+                "likes": 0,  # Add real data if available
+                "comments": 0  # Add real data if available
+            }
+            for a in recent_articles
+        ],
+        "debug": False
+    }
 
     fastapi_scores = {}
     try:
-        for batch in chunked(payload, 50):
-            res = requests.post(
-                "http://144.91.84.230:8002/rank",
-                json=batch,
-                params={"genre": "siyaset", "country": "TR"},
-                timeout=5
-            )
-            if res.ok:
-                response_data = res.json()
-                if isinstance(response_data, list):
-                    # Response is a list, so we proceed with the loop
-                    for r in response_data:
-                        article_id = r.get("article", {}).get("articleId")
-                        if article_id:
-                            fastapi_scores[article_id] = r.get("score", 0.5)
-                else:
-                    print("Expected list, but got:", response_data)
+        # You might need to break this into smaller batches if you have too many articles
+        response = requests.post(
+            "http://144.91.84.230:8002/rank",
+            json=fastapi_request,
+            params={"genre": "siyaset", "country": "TR"},
+            timeout=10
+        )
+        
+        if response.ok:
+            response_data = response.json()
+            if isinstance(response_data, list):
+                for idx, r in enumerate(response_data):
+                    if idx < len(recent_articles):
+                        article_id = str(recent_articles[idx].articleId)
+                        fastapi_scores[article_id] = r.get("score", 0.5)
+            else:
+                print("Expected list, but got:", response_data)
     except Exception as e:
         print("⚠️ FastAPI ranker failed:", str(e))
 
