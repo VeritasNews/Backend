@@ -82,7 +82,7 @@ class PasswordResetRequestView(APIView):
         
         # Create reset links
         mobile_deep_link = f"veritasnews://reset-password/{uid}/{token}"
-        web_url = f"http://localhost:8000/api/reset-password/{uid}/{token}/"
+        web_url = f"http://144.91.84.230:8001/api/reset-password/{uid}/{token}/"
         
         # Prepare email
         email_subject = "Reset your Veritas News password"
