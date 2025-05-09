@@ -3,7 +3,7 @@ import requests
 
 FASTAPI_RANKING_URL = "http://144.91.84.230:8002/v1/rank"  # Updated with your backend server
 
-def rank_articles(articles, genre="siyaset", country="türkiye"):
+def rank_articles(articles, genre="siyaset", country="TR"):
     payload = []
     for a in articles:
         try:

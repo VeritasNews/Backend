@@ -494,7 +494,7 @@ def personalized_feed(request):
             res = requests.post(
                 "http://144.91.84.230:8002/rank",
                 json=batch,
-                params={"genre": "politics", "country": "TR"},
+                params={"genre": "siyaset", "country": "TR"},
                 timeout=5
             )
             if res.ok:
