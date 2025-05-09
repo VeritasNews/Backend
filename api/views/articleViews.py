@@ -444,7 +444,7 @@ from api.serializers import ArticleSerializer
 import requests
 from datetime import datetime, timedelta
 
-RANKING_API_URL = "http://144.91.84.230:8002/v1/rank"
+FASTAPI_RANKING_URL = "http://144.91.84.230:8002/rank"  # POST request should be sent to this URL
 
 from django.core.cache import cache
 from more_itertools import chunked
@@ -492,7 +492,7 @@ def personalized_feed(request):
     try:
         for batch in chunked(payload, 50):
             res = requests.post(
-                "http://144.91.84.230:8002/v1/rank",
+                "http://144.91.84.230:8002/rank",
                 json=batch,
                 params={"genre": "politics", "country": "TR"},
                 timeout=5
