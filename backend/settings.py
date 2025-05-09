@@ -23,6 +23,12 @@ print("📄 Using .env file from:", find_dotenv())
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+import os
+
+# The directory where static files will be collected
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
@@ -41,7 +47,7 @@ DEFAULT_FROM_EMAIL = 'Veritas News <noreply@veritasnews.com>'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['144.91.84.230']
 
 
 # Application definition
@@ -177,6 +183,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8081",  # React Native Expo
     "http://127.0.0.1:8000",   # Django Server
     "https://backend-r8mw.onrender.com",
+    "https://144.91.84.230:8000",
 ]
 
 # CORS_ALLOW_ALL_ORIGINS = True  # Change this to specific origins later for security
