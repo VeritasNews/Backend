@@ -498,8 +498,11 @@ def personalized_feed(request):
                 timeout=5
             )
             if res.ok:
-                for r in res.json():
-                    fastapi_scores[r["id"]] = r["score"]
+                res_json = res.json()
+                print(res_json)  # Optionally, check the response structure
+                for r in res_json:
+                    article_id = r["article"]["articleId"]
+                    fastapi_scores[article_id] = r["score"]
     except Exception as e:
         print("⚠️ FastAPI ranker failed:", str(e))
 
