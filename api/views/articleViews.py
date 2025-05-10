@@ -167,33 +167,48 @@ def get_articles(request):
     serializer = ArticleSerializer(articles, many=True)
     serialized_data = serializer.data
 
-    # Prepare payload for FastAPI ranking
-    ranking_payload = [
-        {
-            "id": str(a["articleId"]),
-            "title": a["title"] or "",
-            "body": a["longerSummary"] or a["summary"] or "",
-            "source_score": 0.8,
-            "published_at": a["createdAt"] or "2025-01-01T00:00:00Z",
-            "clicks": a["popularityScore"] or 0,
-            "shares": a.get("liked_by_count", 0)
-        }
-        for a in serialized_data
-    ]
+    # Prepare payload matching FastAPI expectations
+    ranking_payload = {
+        "articles": [
+            {
+                "title": a["title"] or "",
+                "content": a.get("longerSummary") or a["summary"] or "",
+                "timestamp": a["createdAt"] or "2025-01-01T00:00:00Z",
+                "source": a.get("source", "default_source"),
+                "views": a.get("popularityScore", 0),
+                "likes": a.get("liked_by_count", 0),
+                "comments": 0  # Optional field; add real data if you have it
+            }
+            for a in serialized_data
+        ],
+        "debug": False
+    }
 
     try:
-        rank_response = requests.post(RANKING_API_URL, json=ranking_payload, params={
-            "genre": category,
-            "country": "TR"
-        })
-        
-        # Log the rank response
+        rank_response = requests.post(
+            RANKING_API_URL,
+            json=ranking_payload,
+            params={
+                "genre": category or "genel",
+                "country": "TR"
+            },
+            timeout=10
+        )
+
         rank_data = rank_response.json()
-        print("⚡ Rank response data:", rank_data)  # Debugging response
-        
-        # Map scores and sort articles
-        score_map = {r["id"]: r["score"] for r in rank_data}
-        sorted_articles = sorted(serialized_data, key=lambda a: score_map.get(str(a["articleId"]), 0), reverse=True)
+        print("⚡ Rank response data:", rank_data)
+
+        score_map = {
+            str(serialized_data[idx]["articleId"]): r.get("score", 0.5)
+            for idx, r in enumerate(rank_data)
+            if idx < len(serialized_data)
+        }
+
+        sorted_articles = sorted(
+            serialized_data,
+            key=lambda a: score_map.get(str(a["articleId"]), 0),
+            reverse=True
+        )
 
         return Response(sorted_articles)
 

@@ -99,14 +99,26 @@ def severity_predict(text: str) -> float:
     if "patlama" in lowered: score += 0.3
     return min(score, 1.5)
 
+from datetime import datetime, timezone
+
 def recency_weight(date_str: str) -> float:
     try:
-        article_time = datetime.fromisoformat(date_str)
-        delta = (datetime.now() - article_time).total_seconds()
-        if delta < 3600: return 1.5
-        elif delta < 86400: return 1.2
-        elif delta < 3 * 86400: return 1.0
-        else: return 0.8
+        # Ensure that the article timestamp is timezone-naive
+        article_time = datetime.fromisoformat(date_str).astimezone(timezone.utc).replace(tzinfo=None)
+        # Get the current time as a naive datetime (also in UTC)
+        current_time = datetime.now(timezone.utc).replace(tzinfo=None)
+        
+        # Calculate time delta in seconds
+        delta = (current_time - article_time).total_seconds()
+        
+        if delta < 3600:  # Less than 1 hour
+            return 1.5
+        elif delta < 86400:  # Less than 24 hours
+            return 1.2
+        elif delta < 3 * 86400:  # Less than 3 days
+            return 1.0
+        else:
+            return 0.8
     except Exception as e:
         logging.error(f"Invalid timestamp: {e}")
         return 1.0
