@@ -154,7 +154,7 @@ from api.serializers import ArticleSerializer
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-RANKING_API_URL = "http://144.91.84.230:8002/v1/rank"
+RANKING_API_URL = "http://144.91.84.230:8002/rank"
 
 @api_view(['GET'])
 def get_articles(request):
@@ -186,10 +186,15 @@ def get_articles(request):
             "genre": category,
             "country": "TR"
         })
+        
+        # Log the rank response
         rank_data = rank_response.json()
+        print("⚡ Rank response data:", rank_data)  # Debugging response
+        
+        # Map scores and sort articles
         score_map = {r["id"]: r["score"] for r in rank_data}
-        # Sort original data by score
         sorted_articles = sorted(serialized_data, key=lambda a: score_map.get(str(a["articleId"]), 0), reverse=True)
+
         return Response(sorted_articles)
 
     except Exception as e:
