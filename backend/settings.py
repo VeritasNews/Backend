@@ -184,7 +184,11 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",   # Django Server
     "https://backend-r8mw.onrender.com",
     "https://144.91.84.230:8001",
-    "http://144.91.84.230:8081"
+    "http://144.91.84.230:8081",
+    "https://veritasnews.online",     
+    "https://www.veritasnews.online",
+    "https://www.veritasnews.online:8001",
+    "https://veritasnews.online:8001"
 ]
 
 # CORS_ALLOW_ALL_ORIGINS = True  # Change this to specific origins later for security

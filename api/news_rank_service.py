@@ -43,6 +43,7 @@ SOURCE_WEIGHTS = {
     "t24": 1.0,
     "bianet": 1.2,
     "cumhuriyet": 1.3,
+    "ahaber": -0.5,
 }
 
 SCORE_WEIGHTS = {
