@@ -12,6 +12,7 @@ from .views.userViews import (
 )
 from .views.articleViews import InsertSingleArticleView, personalized_feed, log_article_interaction, ArticleListView, InsertArticlesView, delete_articles, get_articles, get_article_by_id
 from .views.authViews import RegisterView, LoginView, PasswordResetRequestView, PasswordResetConfirmView
+from .views import UnfriendView
 from .views.likeViews import like_article, unlike_article, get_liked_articles
 from .views.friendViews import CombinedSearchView, FriendsWhoLikedArticleView, FriendsLikedArticlesView, FriendRequestListView, SendFriendRequestView, AcceptFriendRequestView, RejectFriendRequestView, ListFriendsView, SearchUsersView
 from django.views.generic import TemplateView
