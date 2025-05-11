@@ -193,3 +193,21 @@ class FriendsWhoLikedArticleView(APIView):
         # Use your UserSerializer (ensure it includes name/userName/userId)
         serializer = UserSerializer(liked_friends, many=True)
         return Response(serializer.data)
+
+
+class UnfriendView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, user_id):
+        try:
+            to_unfriend = User.objects.get(userId=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        if to_unfriend in user.friends.all():
+            user.friends.remove(to_unfriend)
+            to_unfriend.friends.remove(user)
+            return Response({'message': 'Unfriended successfully.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Not friends.'}, status=status.HTTP_400_BAD_REQUEST)
